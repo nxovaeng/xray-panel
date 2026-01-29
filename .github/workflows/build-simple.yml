@@ -12,14 +12,23 @@ on:
         required: false
         default: 'linux,windows,darwin'
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build:
     name: Build ${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ubuntu-latest
+    # 只构建选中的平台
+    if: |
+      github.event.inputs.platforms == 'linux,windows,darwin' ||
+      contains(github.event.inputs.platforms, matrix.os)
     strategy:
       matrix:
         os: [linux, windows, darwin]
         arch: [amd64, arm64]
+      fail-fast: false
 
     steps:
       - name: Checkout

@@ -8,6 +8,10 @@ on:
         required: true
         default: 'v1.0.0'
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build:
     name: Build for ${{ matrix.os }}-${{ matrix.arch }}

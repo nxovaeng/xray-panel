@@ -1,0 +1,258 @@
+name: Flexible Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      platforms:
+        description: 'Platforms to build'
+        required: true
+        type: choice
+        options:
+          - 'all'
+          - 'linux-only'
+          - 'windows-only'
+          - 'darwin-only'
+          - 'linux-windows'
+        default: 'all'
+      architectures:
+        description: 'Architectures to build'
+        required: true
+        type: choice
+        options:
+          - 'both'
+          - 'amd64-only'
+          - 'arm64-only'
+        default: 'both'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  prepare:
+    name: Prepare Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set build matrix
+        id: set-matrix
+        run: |
+          # Define all possible combinations
+          declare -A platforms
+          platforms["all"]="linux windows darwin"
+          platforms["linux-only"]="linux"
+          platforms["windows-only"]="windows"
+          platforms["darwin-only"]="darwin"
+          platforms["linux-windows"]="linux windows"
+          
+          declare -A architectures
+          architectures["both"]="amd64 arm64"
+          architectures["amd64-only"]="amd64"
+          architectures["arm64-only"]="arm64"
+          
+          # Get selected platforms and architectures
+          SELECTED_PLATFORMS="${platforms[${{ github.event.inputs.platforms }}]}"
+          SELECTED_ARCHS="${architectures[${{ github.event.inputs.architectures }}]}"
+          
+          # Build matrix JSON
+          MATRIX_JSON='{"include":['
+          FIRST=true
+          
+          for os in $SELECTED_PLATFORMS; do
+            for arch in $SELECTED_ARCHS; do
+              if [ "$FIRST" = true ]; then
+                FIRST=false
+              else
+                MATRIX_JSON+=','
+              fi
+              MATRIX_JSON+="{\"os\":\"$os\",\"arch\":\"$arch\"}"
+            done
+          done
+          
+          MATRIX_JSON+=']}'
+          
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "Build matrix: $MATRIX_JSON"
+
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          OUTPUT="panel-${{ matrix.os }}-${{ matrix.arch }}"
+          [ "${{ matrix.os }}" = "windows" ] && OUTPUT="${OUTPUT}.exe"
+          
+          echo "Building ${OUTPUT}..."
+          go build -v -trimpath \
+            -ldflags="-s -w -X main.Version=${{ github.event.inputs.version }}" \
+            -o "dist/${OUTPUT}" \
+            ./cmd/panel
+          
+          echo "Build complete:"
+          ls -lh dist/
+
+      - name: Package
+        run: |
+          cd dist
+          BINARY="panel-${{ matrix.os }}-${{ matrix.arch }}"
+          [ "${{ matrix.os }}" = "windows" ] && BINARY="${BINARY}.exe"
+          PACKAGE="xray-panel-${{ github.event.inputs.version }}-${{ matrix.os }}-${{ matrix.arch }}"
+          
+          echo "Creating package: ${PACKAGE}"
+          
+          mkdir -p "${PACKAGE}"/{conf,docs}
+          cp "${BINARY}" "${PACKAGE}/"
+          
+          cp ../conf/config.yaml.example "${PACKAGE}/conf/" || true
+          if [ -f "../conf/config.${{ matrix.os }}.yaml" ]; then
+            cp "../conf/config.${{ matrix.os }}.yaml" "${PACKAGE}/conf/config.yaml"
+          else
+            cp ../conf/config.yaml.example "${PACKAGE}/conf/config.yaml"
+          fi
+          
+          cp ../docs/*.md "${PACKAGE}/docs/" 2>/dev/null || true
+          cp ../README.md "${PACKAGE}/" 2>/dev/null || true
+          
+          if [ "${{ matrix.os }}" != "windows" ]; then
+            mkdir -p "${PACKAGE}/scripts"
+            cp ../scripts/*.sh "${PACKAGE}/scripts/" 2>/dev/null || true
+            chmod +x "${PACKAGE}/scripts/"*.sh 2>/dev/null || true
+            chmod +x "${PACKAGE}/${BINARY}"
+          fi
+          
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            zip -r "${PACKAGE}.zip" "${PACKAGE}"
+            ARCHIVE="${PACKAGE}.zip"
+          else
+            tar czf "${PACKAGE}.tar.gz" "${PACKAGE}"
+            ARCHIVE="${PACKAGE}.tar.gz"
+          fi
+          
+          sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          
+          echo "Package created:"
+          ls -lh "${ARCHIVE}"*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Display artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          ls -lhR artifacts/
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec mv {} release/ \;
+          echo "Release files:"
+          ls -lh release/
+
+      - name: Generate release notes
+        run: |
+          cat > release-notes.md << 'EOF'
+          ## 🚀 Xray Panel ${{ github.event.inputs.version }}
+          
+          ### 📦 Build Configuration
+          
+          - **Platforms**: ${{ github.event.inputs.platforms }}
+          - **Architectures**: ${{ github.event.inputs.architectures }}
+          
+          ### 📥 Downloads
+          
+          Download the appropriate package for your system from the assets below.
+          
+          ### 🔐 Verification
+          
+          Verify downloads using SHA256:
+          ```bash
+          sha256sum -c xray-panel-${{ github.event.inputs.version }}-linux-amd64.tar.gz.sha256
+          ```
+          
+          ### 📝 Installation
+          
+          **Linux/macOS:**
+          ```bash
+          tar xzf xray-panel-${{ github.event.inputs.version }}-linux-amd64.tar.gz
+          cd xray-panel-${{ github.event.inputs.version }}-linux-amd64
+          ./panel-linux-amd64
+          ```
+          
+          **Windows:**
+          Extract the ZIP file and run `panel-windows-amd64.exe`
+          
+          ### 📚 Documentation
+          
+          - [Installation Guide](https://github.com/${{ github.repository }}/blob/main/docs/installation.md)
+          - [Configuration](https://github.com/${{ github.repository }}/blob/main/docs/configuration.md)
+          - [Building from Source](https://github.com/${{ github.repository }}/blob/main/docs/building.md)
+          
+          ### ⚠️ First Run
+          
+          Admin credentials are auto-generated on first run. View them with:
+          ```bash
+          ./panel-linux-amd64 -show-admin
+          ```
+          
+          **Change the password immediately after first login!**
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+          files: release/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

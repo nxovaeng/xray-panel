@@ -189,6 +189,9 @@ Xray (监听 127.0.0.1:10001+)
 
 ## 文档
 
+- [Workflows 对比](docs/workflows-comparison.md) - 选择合适的构建方式
+- [403 错误快速修复](QUICK_FIX_403.md) - 解决 GitHub Actions 权限问题
+- [GitHub Actions 故障排查](docs/github-actions-troubleshooting.md) - 详细的错误解决方案
 - [GitHub Actions 使用指南](docs/github-actions.md) - CI/CD 构建说明
 - [快速构建指南](BUILD_GUIDE.md) - 如何构建项目
 - [详细构建文档](docs/building.md) - 完整的构建说明
