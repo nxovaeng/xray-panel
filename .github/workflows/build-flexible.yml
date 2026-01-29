@@ -230,9 +230,9 @@ jobs:
           
           ### 📚 Documentation
           
-          - [Installation Guide](https://github.com/${{ github.repository }}/blob/main/docs/installation.md)
-          - [Configuration](https://github.com/${{ github.repository }}/blob/main/docs/configuration.md)
-          - [Building from Source](https://github.com/${{ github.repository }}/blob/main/docs/building.md)
+          - [Installation Guide](https://github.com/${{ github.repository }}/blob/master/docs/installation.md)
+          - [Configuration](https://github.com/${{ github.repository }}/blob/master/docs/configuration.md)
+          - [Building from Source](https://github.com/${{ github.repository }}/blob/master/docs/building.md)
           
           ### ⚠️ First Run
           
