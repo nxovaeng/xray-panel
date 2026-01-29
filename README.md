@@ -189,15 +189,18 @@ Xray (监听 127.0.0.1:10001+)
 
 ## 文档
 
+- [GitHub Actions 使用指南](docs/github-actions.md) - CI/CD 构建说明
 - [快速构建指南](BUILD_GUIDE.md) - 如何构建项目
 - [详细构建文档](docs/building.md) - 完整的构建说明
+- [安装文档](docs/installation.md) - 安装和部署指南
 - [配置文件说明](docs/configuration.md)
 - [日志系统文档](docs/logging.md)
 - [CLI 命令使用](docs/cli-commands.md)
 - [管理员账户安全](docs/admin-security.md)
 - [用户与入站关系](docs/user-inbound-relationship.md)
 - [订阅系统安全](docs/subscription-security.md)
-- [配置生成与部署](docs/configuration.md)
+- [配置生成与部署](docs/config-deployment.md)
+- [故障排查](docs/troubleshooting.md)
 
 
 ## CLI 命令

@@ -1,0 +1,109 @@
+name: Test Build
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Test ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+          - os: windows
+            runner: windows-latest
+          - os: darwin
+            runner: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build
+        run: go build -v ./cmd/panel
+
+      - name: Test binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            ./panel.exe -version || true
+          else
+            ./panel -version || true
+          fi
+
+  build-all:
+    name: Build All Platforms
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build all platforms
+        run: |
+          mkdir -p dist
+          
+          platforms=(
+            "linux/amd64"
+            "linux/arm64"
+            "windows/amd64"
+            "windows/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+          )
+          
+          for platform in "${platforms[@]}"; do
+            GOOS="${platform%/*}"
+            GOARCH="${platform#*/}"
+            OUTPUT="dist/panel-${GOOS}-${GOARCH}"
+            
+            if [ "$GOOS" = "windows" ]; then
+              OUTPUT="${OUTPUT}.exe"
+            fi
+            
+            echo "Building ${GOOS}/${GOARCH}..."
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+              -v -trimpath \
+              -ldflags="-s -w" \
+              -o "${OUTPUT}" \
+              ./cmd/panel
+            
+            if [ $? -eq 0 ]; then
+              echo "✓ Built ${OUTPUT}"
+            else
+              echo "✗ Failed to build ${OUTPUT}"
+              exit 1
+            fi
+          done
+          
+          echo ""
+          echo "Build summary:"
+          ls -lh dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-builds
+          path: dist/*
+          retention-days: 7

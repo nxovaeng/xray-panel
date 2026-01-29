@@ -4,6 +4,19 @@
 # Supports: Ubuntu 20.04+, Debian 10+, CentOS 8+
 # Author: Xray Panel Team
 # Version: 1.0.0
+#
+# Usage:
+#   Default installation:
+#     bash install.sh
+#
+#   Custom repository:
+#     GITHUB_REPO="username/repo" bash install.sh
+#
+#   Custom version:
+#     PANEL_VERSION="v1.0.0" bash install.sh
+#
+#   Both:
+#     GITHUB_REPO="username/repo" PANEL_VERSION="v1.0.0" bash install.sh
 
 set -e
 
@@ -22,7 +35,28 @@ CONFIG_DIR="/etc/xray-panel"
 DATA_DIR="/var/lib/xray-panel"
 LOG_DIR="/var/log/xray-panel"
 SYSTEMD_SERVICE="/etc/systemd/system/xray-panel.service"
-GITHUB_REPO="yourusername/xray-panel"
+
+# Detect GitHub repository
+detect_github_repo() {
+    local repo=""
+    
+    # 1. Check environment variable
+    if [[ -n "$GITHUB_REPO" ]]; then
+        repo="$GITHUB_REPO"
+    # 2. Try to detect from git remote
+    elif command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
+        repo=$(git config --get remote.origin.url 2>/dev/null | sed -E 's#.*github\.com[:/]([^/]+/[^/]+)(\.git)?$#\1#')
+    fi
+    
+    # 3. Fallback to default
+    if [[ -z "$repo" ]]; then
+        repo="nxovaeng/xray-panel"
+    fi
+    
+    echo "$repo"
+}
+
+GITHUB_REPO=$(detect_github_repo)
 
 # Functions
 log_info() {
@@ -355,6 +389,7 @@ EOF
     echo ""
     
     log_info "Starting installation..."
+    log_info "Using repository: $GITHUB_REPO"
     
     check_root
     detect_os

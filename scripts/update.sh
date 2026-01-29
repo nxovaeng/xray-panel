@@ -3,6 +3,17 @@
 # Xray Panel Update Script
 # Author: Xray Panel Team
 # Version: 1.0.0
+#
+# Usage:
+#   Update to latest:
+#     bash update.sh
+#
+#   Update to specific version:
+#     bash update.sh v1.0.0
+#
+#   Custom repository:
+#     GITHUB_REPO="username/repo" bash update.sh
+#     GITHUB_REPO="username/repo" bash update.sh v1.0.0
 
 set -e
 
@@ -18,7 +29,29 @@ PLAIN='\033[0m'
 INSTALL_DIR="/opt/xray-panel"
 CONFIG_DIR="/etc/xray-panel"
 DATA_DIR="/var/lib/xray-panel"
-GITHUB_REPO="yourusername/xray-panel"
+LOG_DIR="/var/log/xray-panel"
+
+# Detect GitHub repository
+detect_github_repo() {
+    local repo=""
+    
+    # 1. Check environment variable
+    if [[ -n "$GITHUB_REPO" ]]; then
+        repo="$GITHUB_REPO"
+    # 2. Try to detect from git remote
+    elif command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
+        repo=$(git config --get remote.origin.url 2>/dev/null | sed -E 's#.*github\.com[:/]([^/]+/[^/]+)(\.git)?$#\1#')
+    fi
+    
+    # 3. Fallback to default
+    if [[ -z "$repo" ]]; then
+        repo="nxovaeng/xray-panel"
+    fi
+    
+    echo "$repo"
+}
+
+GITHUB_REPO=$(detect_github_repo)
 PANEL_VERSION="${1:-latest}"
 
 log_info() {
@@ -211,6 +244,7 @@ main() {
 EOF
     echo -e "${PLAIN}"
     echo -e "${CYAN}Xray Panel Updater${PLAIN}"
+    echo -e "${CYAN}Repository: $GITHUB_REPO${PLAIN}"
     echo ""
     
     check_root
