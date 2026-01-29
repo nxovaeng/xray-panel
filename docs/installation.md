@@ -24,23 +24,23 @@
 
 **默认安装**（使用 nxovaeng/xray-panel 仓库）:
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/main/scripts/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh)
 ```
 
 **自定义仓库**:
 ```bash
 # 如果你 fork 了项目
-GITHUB_REPO="your-username/xray-panel" bash <(curl -Ls https://raw.githubusercontent.com/your-username/xray-panel/main/scripts/install.sh)
+GITHUB_REPO="your-username/xray-panel" bash <(curl -Ls https://raw.githubusercontent.com/your-username/xray-panel/master/scripts/install.sh)
 ```
 
 **指定版本**:
 ```bash
-PANEL_VERSION="v1.0.0" bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/main/scripts/install.sh)
+PANEL_VERSION="v1.0.0" bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh)
 ```
 
 **同时指定仓库和版本**:
 ```bash
-GITHUB_REPO="your-username/xray-panel" PANEL_VERSION="v1.0.0" bash <(curl -Ls https://raw.githubusercontent.com/your-username/xray-panel/main/scripts/install.sh)
+GITHUB_REPO="your-username/xray-panel" PANEL_VERSION="v1.0.0" bash <(curl -Ls https://raw.githubusercontent.com/your-username/xray-panel/master/scripts/install.sh)
 ```
 
 安装脚本会自动：
@@ -89,12 +89,13 @@ bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release
 mkdir -p /opt/xray-panel
 cd /opt/xray-panel
 
-# 下载最新版本（替换为实际的架构）
+# 下载最新版本（替换为实际的架构和版本）
 ARCH="amd64"  # 或 arm64
-wget https://github.com/yourusername/xray-panel/releases/latest/download/xray-panel-linux-${ARCH}.tar.gz
+VERSION="v1.0.0"  # 或使用 API 获取最新版本
+wget https://github.com/nxovaeng/xray-panel/releases/download/${VERSION}/xray-panel-${VERSION}-linux-${ARCH}.tar.gz
 
 # 解压
-tar xzf xray-panel-linux-${ARCH}.tar.gz
+tar xzf xray-panel-${VERSION}-linux-${ARCH}.tar.gz
 
 # 创建符号链接
 ln -s /opt/xray-panel/panel-linux-${ARCH} /usr/local/bin/xray-panel
@@ -350,17 +351,17 @@ curl ifconfig.me
 
 **更新到最新版本**:
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/main/scripts/update.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/update.sh)
 ```
 
 **更新到指定版本**:
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/main/scripts/update.sh) v1.0.0
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/update.sh) v1.0.0
 ```
 
 **自定义仓库**:
 ```bash
-GITHUB_REPO="your-username/xray-panel" bash <(curl -Ls https://raw.githubusercontent.com/your-username/xray-panel/main/scripts/update.sh)
+GITHUB_REPO="your-username/xray-panel" bash <(curl -Ls https://raw.githubusercontent.com/your-username/xray-panel/master/scripts/update.sh)
 ```
 
 ### 手动更新
@@ -374,8 +375,9 @@ cp /usr/local/bin/xray-panel /usr/local/bin/xray-panel.backup
 
 # 下载新版本
 cd /tmp
-wget https://github.com/yourusername/xray-panel/releases/latest/download/xray-panel-linux-amd64.tar.gz
-tar xzf xray-panel-linux-amd64.tar.gz
+VERSION="v1.0.0"  # 替换为实际版本
+wget https://github.com/nxovaeng/xray-panel/releases/download/${VERSION}/xray-panel-${VERSION}-linux-amd64.tar.gz
+tar xzf xray-panel-${VERSION}-linux-amd64.tar.gz
 
 # 替换二进制文件
 mv panel-linux-amd64 /usr/local/bin/xray-panel
@@ -390,7 +392,7 @@ systemctl start xray-panel
 ### 使用卸载脚本
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/main/scripts/uninstall.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/uninstall.sh)
 ```
 
 ### 手动卸载

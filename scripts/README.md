@@ -175,9 +175,23 @@ PANEL_VERSION="dev" bash install.sh
 
 ### Q: 脚本在哪里下载二进制文件？
 
-从 GitHub Releases:
+从 GitHub Releases，URL 格式：
 ```
 https://github.com/$GITHUB_REPO/releases/download/$VERSION/xray-panel-$VERSION-$OS-$ARCH.tar.gz
+```
+
+示例：
+```
+https://github.com/nxovaeng/xray-panel/releases/download/v1.0.0/xray-panel-v1.0.0-linux-amd64.tar.gz
+https://github.com/nxovaeng/xray-panel/releases/download/v1.0.0/xray-panel-v1.0.0-windows-amd64.zip
+```
+
+**注意**: 文件名中包含版本号！
+
+### Q: 如何测试下载 URL？
+
+```bash
+bash scripts/test-download-url.sh v1.0.0
 ```
 
 ### Q: 如何验证下载的文件？

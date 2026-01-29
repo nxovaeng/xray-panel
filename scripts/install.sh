@@ -154,12 +154,21 @@ download_panel() {
     mkdir -p "$DATA_DIR"
     mkdir -p "$LOG_DIR"
     
-    # Determine download URL
+    # Get the actual version tag if using "latest"
     if [[ "$PANEL_VERSION" == "latest" ]]; then
-        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/latest/download/xray-panel-linux-${ARCH}.tar.gz"
+        log_info "Fetching latest version..."
+        ACTUAL_VERSION=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep -oP '"tag_name": "\K(.*)(?=")')
+        if [[ -z "$ACTUAL_VERSION" ]]; then
+            log_error "Failed to get latest version"
+            exit 1
+        fi
+        log_info "Latest version: $ACTUAL_VERSION"
     else
-        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/${PANEL_VERSION}/xray-panel-${PANEL_VERSION}-linux-${ARCH}.tar.gz"
+        ACTUAL_VERSION="$PANEL_VERSION"
     fi
+    
+    # Construct download URL with version in filename
+    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/${ACTUAL_VERSION}/xray-panel-${ACTUAL_VERSION}-linux-${ARCH}.tar.gz"
     
     log_info "Downloading from: $DOWNLOAD_URL"
     

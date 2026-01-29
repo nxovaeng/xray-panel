@@ -237,7 +237,7 @@ tag already exists
 Workflow does not exist or does not have a workflow_dispatch trigger
 ```
 
-**原因**: Workflow 文件不在 main 分支或没有 workflow_dispatch 触发器。
+**原因**: Workflow 文件不在 master 分支或没有 workflow_dispatch 触发器。
 
 **解决方案**:
 
@@ -246,11 +246,11 @@ Workflow does not exist or does not have a workflow_dispatch trigger
    .github/workflows/release.yml
    ```
 
-2. **确保已推送到 main 分支**:
+2. **确保已推送到 master 分支**:
    ```bash
    git add .github/workflows/release.yml
    git commit -m "Add release workflow"
-   git push origin main
+   git push origin master
    ```
 
 3. **检查触发器配置**:
@@ -383,7 +383,7 @@ jobs:
 
 发布前检查:
 
-- [ ] 代码已提交并推送到 main 分支
+- [ ] 代码已提交并推送到 master 分支
 - [ ] Workflow 文件在 `.github/workflows/` 目录
 - [ ] 仓库设置中启用了 Actions
 - [ ] Workflow permissions 设置为 "Read and write"

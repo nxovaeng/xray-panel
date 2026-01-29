@@ -63,8 +63,8 @@
 **用途**: 自动测试构建
 
 **触发方式**: 
-- Push 到 main/master/develop 分支
-- Pull Request 到 main/master 分支
+- Push 到 master/develop 分支
+- Pull Request 到 master 分支
 
 **特点**:
 - 自动运行测试
@@ -84,7 +84,7 @@
 ```bash
 git add .
 git commit -m "Release v1.0.0"
-git push origin main
+git push origin master
 ```
 
 #### 2. 触发构建
@@ -93,7 +93,7 @@ git push origin main
 2. 点击左侧的 "Release Build"
 3. 点击右侧的 "Run workflow" 按钮
 4. 在弹出的对话框中：
-   - Branch: 选择 `main` 或你的主分支
+   - Branch: 选择 `master` 或你的主分支
    - Version: 输入 `v1.0.0`（必须以 v 开头）
 5. 点击绿色的 "Run workflow" 按钮
 
@@ -182,7 +182,7 @@ strategy:
 
 ```bash
 # Push 代码会自动触发
-git push origin main
+git push origin master
 
 # 或者创建 Pull Request
 ```
@@ -239,7 +239,7 @@ git push origin v1.0.0
 
 ### 2. 发布前检查清单
 
-- [ ] 代码已提交并推送
+- [ ] 代码已提交并推送到 master 分支
 - [ ] 所有测试通过
 - [ ] 更新了 CHANGELOG
 - [ ] 更新了版本号
