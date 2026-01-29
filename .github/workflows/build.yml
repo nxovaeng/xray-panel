@@ -1,0 +1,252 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux builds
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          
+          # Windows builds
+          - os: windows
+            arch: amd64
+            goos: windows
+            goarch: amd64
+          - os: windows
+            arch: arm64
+            goos: windows
+            goarch: arm64
+          
+          # macOS builds
+          - os: darwin
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          OUTPUT_NAME="panel-${{ matrix.os }}-${{ matrix.arch }}"
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          fi
+          go build -v -trimpath -ldflags="-s -w -X main.Version=${{ github.event.inputs.version }}" -o "dist/${OUTPUT_NAME}" ./cmd/panel
+          
+      - name: Create archive
+        run: |
+          cd dist
+          ARCHIVE_NAME="xray-panel-${{ github.event.inputs.version }}-${{ matrix.os }}-${{ matrix.arch }}"
+          
+          # Copy necessary files
+          mkdir -p "${ARCHIVE_NAME}"
+          cp panel-${{ matrix.os }}-${{ matrix.arch }}* "${ARCHIVE_NAME}/"
+          
+          # Copy config examples
+          mkdir -p "${ARCHIVE_NAME}/conf"
+          cp ../conf/config.yaml.example "${ARCHIVE_NAME}/conf/"
+          cp ../conf/config.${{ matrix.os }}.yaml "${ARCHIVE_NAME}/conf/config.yaml" || cp ../conf/config.yaml.example "${ARCHIVE_NAME}/conf/config.yaml"
+          
+          # Copy docs
+          mkdir -p "${ARCHIVE_NAME}/docs"
+          cp ../docs/*.md "${ARCHIVE_NAME}/docs/" || true
+          
+          # Copy scripts
+          if [ "${{ matrix.os }}" != "windows" ]; then
+            mkdir -p "${ARCHIVE_NAME}/scripts"
+            cp ../scripts/*.sh "${ARCHIVE_NAME}/scripts/" || true
+            chmod +x "${ARCHIVE_NAME}/scripts/"*.sh || true
+          fi
+          
+          # Create README
+          cat > "${ARCHIVE_NAME}/README.txt" << EOF
+          Xray Panel ${{ github.event.inputs.version }}
+          
+          Platform: ${{ matrix.os }}-${{ matrix.arch }}
+          Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          Quick Start:
+          1. Edit conf/config.yaml with your settings
+          2. Run the panel binary
+          3. Access the web interface at http://localhost:8080
+          
+          For detailed documentation, see docs/ directory
+          
+          GitHub: https://github.com/${{ github.repository }}
+          EOF
+          
+          # Create archive
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            zip -r "${ARCHIVE_NAME}.zip" "${ARCHIVE_NAME}"
+          else
+            tar czf "${ARCHIVE_NAME}.tar.gz" "${ARCHIVE_NAME}"
+          fi
+          
+          # Calculate checksums
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            sha256sum "${ARCHIVE_NAME}.zip" > "${ARCHIVE_NAME}.zip.sha256"
+          else
+            sha256sum "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-panel-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+          retention-days: 30
+
+  create-release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -R artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec cp {} release/ \;
+          ls -lh release/
+
+      - name: Generate release notes
+        run: |
+          cat > release/RELEASE_NOTES.md << 'EOF'
+          # Xray Panel ${{ github.event.inputs.version }}
+          
+          ## 📦 Downloads
+          
+          Choose the appropriate package for your platform:
+          
+          ### Linux
+          - **AMD64**: `xray-panel-${{ github.event.inputs.version }}-linux-amd64.tar.gz`
+          - **ARM64**: `xray-panel-${{ github.event.inputs.version }}-linux-arm64.tar.gz`
+          
+          ### Windows
+          - **AMD64**: `xray-panel-${{ github.event.inputs.version }}-windows-amd64.zip`
+          - **ARM64**: `xray-panel-${{ github.event.inputs.version }}-windows-arm64.zip`
+          
+          ### macOS
+          - **Intel (AMD64)**: `xray-panel-${{ github.event.inputs.version }}-darwin-amd64.tar.gz`
+          - **Apple Silicon (ARM64)**: `xray-panel-${{ github.event.inputs.version }}-darwin-arm64.tar.gz`
+          
+          ## 🔐 Verification
+          
+          Verify your download using SHA256 checksums:
+          ```bash
+          sha256sum -c xray-panel-${{ github.event.inputs.version }}-linux-amd64.tar.gz.sha256
+          ```
+          
+          ## 📝 Installation
+          
+          ### Linux/macOS
+          ```bash
+          # Extract
+          tar xzf xray-panel-${{ github.event.inputs.version }}-linux-amd64.tar.gz
+          cd xray-panel-${{ github.event.inputs.version }}-linux-amd64
+          
+          # Configure
+          cp conf/config.yaml.example conf/config.yaml
+          nano conf/config.yaml
+          
+          # Run
+          ./panel-linux-amd64
+          ```
+          
+          ### Windows
+          ```powershell
+          # Extract the ZIP file
+          # Edit conf\config.yaml
+          # Run panel-windows-amd64.exe
+          ```
+          
+          ## 🚀 Features
+          
+          - Multi-platform support (Linux, Windows, macOS)
+          - Multi-architecture support (AMD64, ARM64)
+          - Web-based management interface
+          - Xray configuration management
+          - User management with traffic limits
+          - Subscription link generation
+          - Nginx integration for domain routing
+          - Comprehensive logging system
+          - CLI tools for administration
+          
+          ## 📚 Documentation
+          
+          See the `docs/` directory in the package for detailed documentation.
+          
+          ## ⚠️ Security Notes
+          
+          - Change default admin credentials immediately after first login
+          - Use HTTPS in production environments
+          - Keep your installation up to date
+          - Review security documentation in `docs/admin-security.md`
+          
+          ## 🐛 Bug Reports
+          
+          Report issues at: https://github.com/${{ github.repository }}/issues
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
+          body_path: release/RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: |
+            release/*.tar.gz
+            release/*.zip
+            release/*.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

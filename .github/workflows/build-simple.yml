@@ -1,0 +1,123 @@
+name: Build (AMD64 & ARM64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      platforms:
+        description: 'Platforms to build (comma-separated: linux,windows,darwin)'
+        required: false
+        default: 'linux,windows,darwin'
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux, windows, darwin]
+        arch: [amd64, arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          # Set output name
+          OUTPUT="panel-${{ matrix.os }}-${{ matrix.arch }}"
+          [ "${{ matrix.os }}" = "windows" ] && OUTPUT="${OUTPUT}.exe"
+          
+          # Build
+          go build -v -trimpath \
+            -ldflags="-s -w -X main.Version=${{ github.event.inputs.version }}" \
+            -o "dist/${OUTPUT}" \
+            ./cmd/panel
+          
+          # Show info
+          ls -lh dist/
+          file dist/${OUTPUT} || true
+
+      - name: Package
+        run: |
+          cd dist
+          BINARY="panel-${{ matrix.os }}-${{ matrix.arch }}"
+          [ "${{ matrix.os }}" = "windows" ] && BINARY="${BINARY}.exe"
+          PACKAGE="xray-panel-${{ github.event.inputs.version }}-${{ matrix.os }}-${{ matrix.arch }}"
+          
+          # Create package directory
+          mkdir -p "${PACKAGE}"/{conf,docs,scripts}
+          
+          # Copy binary
+          cp "${BINARY}" "${PACKAGE}/"
+          
+          # Copy configs
+          cp ../conf/config.yaml.example "${PACKAGE}/conf/"
+          cp ../conf/config.${{ matrix.os }}.yaml "${PACKAGE}/conf/config.yaml" 2>/dev/null || \
+            cp ../conf/config.yaml.example "${PACKAGE}/conf/config.yaml"
+          
+          # Copy docs
+          cp ../docs/*.md "${PACKAGE}/docs/" 2>/dev/null || true
+          
+          # Copy scripts (non-Windows only)
+          if [ "${{ matrix.os }}" != "windows" ]; then
+            cp ../scripts/*.sh "${PACKAGE}/scripts/" 2>/dev/null || true
+            chmod +x "${PACKAGE}/scripts/"*.sh 2>/dev/null || true
+            chmod +x "${PACKAGE}/${BINARY}"
+          fi
+          
+          # Create archive
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            zip -r "${PACKAGE}.zip" "${PACKAGE}"
+            sha256sum "${PACKAGE}.zip" > "${PACKAGE}.zip.sha256"
+          else
+            tar czf "${PACKAGE}.tar.gz" "${PACKAGE}"
+            sha256sum "${PACKAGE}.tar.gz" > "${PACKAGE}.tar.gz.sha256"
+          fi
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*.{tar.gz,zip,sha256}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release
+        run: |
+          mkdir release
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec cp {} release/ \;
+          ls -lh release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: ${{ github.event.inputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

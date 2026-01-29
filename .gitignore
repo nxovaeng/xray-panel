@@ -1,0 +1,92 @@
+# Binaries for programs and plugins (in root directory only)
+/*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/panel
+/panel.exe
+/panel-*
+dist/panel
+dist/panel-*
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.txt
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+data/*.db
+data/*.db-*
+
+# Log files
+*.log
+logs/*.log
+logs/*.log.*
+logs/*.gz
+
+# Configuration files (keep examples)
+conf/config.yaml
+!conf/config.yaml.example
+!conf/config.*.yaml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build artifacts
+dist/
+build/
+release/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
+ssl/
+certs/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Node modules (if using any frontend tools)
+node_modules/
+
+# Compressed files
+*.zip
+*.tar.gz
+*.rar

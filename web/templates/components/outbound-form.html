@@ -1,0 +1,203 @@
+{{define "components/outbound-form.html"}}
+<form hx-post="/api/outbounds{{if .Outbound}}/{{.Outbound.ID}}{{end}}" 
+      hx-target="#outbounds-table" 
+      hx-swap="innerHTML"
+      hx-on::after-request="if(event.detail.successful) { closeModal(); showNotification('出站配置已保存', 'success'); } else { showNotification('保存失败: ' + event.detail.xhr.responseText, 'error'); }">
+
+    <div class="form-group">
+        <label for="tag">标签 (Tag)</label>
+        <input type="text" id="tag" name="tag" value="{{if .Outbound}}{{.Outbound.Tag}}{{end}}" placeholder="my-proxy-1"
+            required>
+        <small class="form-hint">出站的唯一标识符</small>
+    </div>
+
+    <div class="form-group">
+        <label for="type">协议类型</label>
+        <select id="type" name="type" required onchange="toggleOutboundFields(this.value)">
+            <option value="socks5" {{if and .Outbound (eq .Outbound.Type "socks5")}}selected{{end}}>SOCKS5 代理 (本地其他代理)</option>
+            <option value="wireguard" {{if and .Outbound (eq .Outbound.Type "wireguard")}}selected{{end}}>WireGuard (WARP / Proton VPN)</option>
+            <option value="trojan" {{if and .Outbound (eq .Outbound.Type "trojan")}}selected{{end}}>Trojan (落地服务器)</option>
+        </select>
+        <small class="form-hint">选择出站协议类型</small>
+    </div>
+
+    <!-- SOCKS5 Fields -->
+    <div id="socks5-fields" class="protocol-fields" style="display: {{if or (not .Outbound) (eq .Outbound.Type "socks5")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="server">服务器地址</label>
+            <input type="text" id="server" name="server" value="{{if .Outbound}}{{.Outbound.Server}}{{end}}"
+                placeholder="127.0.0.1">
+            <small class="form-hint">本地或远程 SOCKS5 代理地址</small>
+        </div>
+        <div class="form-group">
+            <label for="port">端口</label>
+            <input type="number" id="port" name="port" value="{{if .Outbound}}{{.Outbound.Port}}{{end}}"
+                placeholder="1080" min="1" max="65535">
+        </div>
+        <div class="form-group">
+            <label for="username">用户名 (可选)</label>
+            <input type="text" id="username" name="username" value="{{if .Outbound}}{{.Outbound.Username}}{{end}}">
+        </div>
+        <div class="form-group">
+            <label for="password">密码 (可选)</label>
+            <input type="password" id="password" name="password" value="">
+        </div>
+    </div>
+
+    <!-- WireGuard Fields -->
+    <div id="wireguard-fields" class="protocol-fields" style="display: {{if and .Outbound (eq .Outbound.Type "wireguard")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="wg_server">服务器地址</label>
+            <input type="text" id="wg_server" name="server" value="{{if .Outbound}}{{.Outbound.Server}}{{end}}"
+                placeholder="engage.cloudflareclient.com">
+            <small class="form-hint">WireGuard 服务器地址</small>
+        </div>
+        <div class="form-group">
+            <label for="wg_port">端口</label>
+            <input type="number" id="wg_port" name="port" value="{{if .Outbound}}{{.Outbound.Port}}{{else}}2408{{end}}"
+                placeholder="2408" min="1" max="65535">
+        </div>
+        <div class="form-group">
+            <label for="wg_secret_key">私钥 (Private Key)</label>
+            <input type="text" id="wg_secret_key" name="wg_secret_key" value="">
+            <small class="form-hint">WireGuard 私钥（不会显示已保存的密钥）</small>
+        </div>
+        <div class="form-group">
+            <label for="wg_public_key">服务器公钥 (Peer Public Key)</label>
+            <input type="text" id="wg_public_key" name="wg_public_key"
+                value="{{if .Outbound}}{{.Outbound.WGPublicKey}}{{end}}"
+                placeholder="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=">
+        </div>
+        <div class="form-group">
+            <label for="wg_local_ipv4">本地 IPv4</label>
+            <input type="text" id="wg_local_ipv4" name="wg_local_ipv4"
+                value="{{if .Outbound}}{{.Outbound.WGLocalIPv4}}{{end}}"
+                placeholder="172.16.0.2/32">
+            <small class="form-hint">分配的 IPv4 地址</small>
+        </div>
+        <div class="form-group">
+            <label for="wg_local_ipv6">本地 IPv6 (可选)</label>
+            <input type="text" id="wg_local_ipv6" name="wg_local_ipv6"
+                value="{{if .Outbound}}{{.Outbound.WGLocalIPv6}}{{end}}"
+                placeholder="2606:4700:110:8a36:df92:102a:9602:fa18/128">
+        </div>
+        <div class="form-group">
+            <label for="wg_reserved">Reserved (WARP 专用)</label>
+            <input type="text" id="wg_reserved" name="wg_reserved"
+                value="{{if .Outbound}}{{.Outbound.WGReserved}}{{end}}"
+                placeholder="[0,0,0]">
+            <small class="form-hint">WARP 保留字节，格式: [0,0,0]</small>
+        </div>
+        <div class="form-group">
+            <label for="wg_mtu">MTU (可选)</label>
+            <input type="number" id="wg_mtu" name="wg_mtu"
+                value="{{if .Outbound}}{{if .Outbound.WGMTU}}{{.Outbound.WGMTU}}{{end}}{{end}}"
+                placeholder="1420" min="1280" max="1500">
+            <small class="form-hint">默认: 1420</small>
+        </div>
+    </div>
+
+    <!-- Trojan Fields -->
+    <div id="trojan-fields" class="protocol-fields" style="display: {{if and .Outbound (eq .Outbound.Type "trojan")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="trojan_server">服务器地址</label>
+            <input type="text" id="trojan_server" name="server" value="{{if .Outbound}}{{.Outbound.Server}}{{end}}"
+                placeholder="example.com">
+            <small class="form-hint">Trojan 服务器域名或 IP</small>
+        </div>
+        <div class="form-group">
+            <label for="trojan_port">端口</label>
+            <input type="number" id="trojan_port" name="port" value="{{if .Outbound}}{{.Outbound.Port}}{{else}}443{{end}}"
+                placeholder="443" min="1" max="65535">
+        </div>
+        <div class="form-group">
+            <label for="trojan_password">密码</label>
+            <input type="password" id="trojan_password" name="trojan_password" value=""
+                placeholder="your-trojan-password">
+            <small class="form-hint">Trojan 服务器密码（不会显示已保存的密码）</small>
+        </div>
+        <div class="form-group">
+            <label for="trojan_sni">SNI (Server Name)</label>
+            <input type="text" id="trojan_sni" name="trojan_sni"
+                value="{{if .Outbound}}{{.Outbound.TrojanSNI}}{{end}}"
+                placeholder="example.com">
+            <small class="form-hint">TLS SNI，通常与服务器地址相同</small>
+        </div>
+        <div class="form-group">
+            <label for="trojan_network">传输协议</label>
+            <select id="trojan_network" name="trojan_network">
+                <option value="tcp" {{if and .Outbound (eq .Outbound.TrojanNetwork "tcp")}}selected{{end}}>TCP</option>
+                <option value="ws" {{if and .Outbound (eq .Outbound.TrojanNetwork "ws")}}selected{{end}}>WebSocket</option>
+                <option value="grpc" {{if and .Outbound (eq .Outbound.TrojanNetwork "grpc")}}selected{{end}}>gRPC</option>
+            </select>
+            <small class="form-hint">底层传输协议</small>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="remark">备注</label>
+        <textarea id="remark" name="remark" rows="2">{{if .Outbound}}{{.Outbound.Remark}}{{end}}</textarea>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" onclick="closeModal()" class="btn">取消</button>
+        <button type="submit" class="btn btn-primary">
+            {{if .Outbound}}更新{{else}}创建{{end}}
+        </button>
+    </div>
+</form>
+
+<script>
+    function toggleOutboundFields(type) {
+        const socks5Fields = document.getElementById('socks5-fields');
+        const wireguardFields = document.getElementById('wireguard-fields');
+        const trojanFields = document.getElementById('trojan-fields');
+        
+        if (!socks5Fields || !wireguardFields || !trojanFields) return;
+        
+        // Hide all fields first
+        socks5Fields.style.display = 'none';
+        wireguardFields.style.display = 'none';
+        trojanFields.style.display = 'none';
+        
+        // Remove required from all protocol-specific fields
+        socks5Fields.querySelectorAll('input').forEach(input => input.removeAttribute('required'));
+        wireguardFields.querySelectorAll('input').forEach(input => input.removeAttribute('required'));
+        trojanFields.querySelectorAll('input').forEach(input => input.removeAttribute('required'));
+        
+        // Show and set required for selected protocol
+        if (type === 'socks5') {
+            socks5Fields.style.display = 'block';
+            // SOCKS5 required fields
+            document.getElementById('server').setAttribute('required', 'required');
+            document.getElementById('port').setAttribute('required', 'required');
+        } else if (type === 'wireguard') {
+            wireguardFields.style.display = 'block';
+            // WireGuard required fields
+            document.getElementById('wg_server').setAttribute('required', 'required');
+            document.getElementById('wg_port').setAttribute('required', 'required');
+            document.getElementById('wg_secret_key').setAttribute('required', 'required');
+            document.getElementById('wg_public_key').setAttribute('required', 'required');
+            document.getElementById('wg_local_ipv4').setAttribute('required', 'required');
+        } else if (type === 'trojan') {
+            trojanFields.style.display = 'block';
+            // Trojan required fields
+            document.getElementById('trojan_server').setAttribute('required', 'required');
+            document.getElementById('trojan_port').setAttribute('required', 'required');
+            document.getElementById('trojan_password').setAttribute('required', 'required');
+            document.getElementById('trojan_sni').setAttribute('required', 'required');
+        }
+    }
+    
+    // Initialize immediately when script runs
+    (function() {
+        // Small delay to ensure DOM is ready
+        setTimeout(function() {
+            const typeSelect = document.getElementById('type');
+            if (typeSelect) {
+                toggleOutboundFields(typeSelect.value);
+            }
+        }, 10);
+    })();
+</script>
+{{end}}

@@ -1,0 +1,101 @@
+{{define "components/inbound-form.html"}}
+<form hx-post="/api/inbounds{{if .Inbound}}/{{.Inbound.ID}}{{end}}" hx-target="#inbounds-table" hx-swap="innerHTML">
+
+    <div class="form-group">
+        <label for="tag">标签</label>
+        <input type="text" id="tag" name="tag" value="{{if .Inbound}}{{.Inbound.Tag}}{{end}}" required>
+    </div>
+
+    <div class="form-group">
+        <label for="protocol">协议</label>
+        <select id="protocol" name="protocol" required>
+            <option value="vless" {{if and .Inbound (eq .Inbound.Protocol "vless")}}selected{{end}}>VLESS</option>
+            <option value="trojan" {{if and .Inbound (eq .Inbound.Protocol "trojan")}}selected{{end}}>Trojan</option>
+        </select>
+        <small class="form-hint">入站协议类型</small>
+    </div>
+
+    <div class="form-group">
+        <label for="port">端口</label>
+        <input type="number" id="port" name="port" value="{{if .Inbound}}{{.Inbound.Port}}{{else}}10001{{end}}"
+            min="1024" max="65535" required>
+        <small class="form-hint">Xray 监听端口（Nginx 反向代理到此端口）</small>
+    </div>
+
+    <div class="form-group">
+        <label for="transport">传输协议</label>
+        <select id="transport" name="transport" required onchange="toggleTransportFields(this.value)">
+            <option value="ws" {{if and .Inbound (eq .Inbound.Transport "ws")}}selected{{end}}>WebSocket</option>
+            <option value="grpc" {{if and .Inbound (eq .Inbound.Transport "grpc")}}selected{{end}}>gRPC</option>
+            <option value="xhttp" {{if and .Inbound (eq .Inbound.Transport "xhttp")}}selected{{end}}>XHTTP (推荐)</option>
+        </select>
+        <small class="form-hint">传输层协议（均可被 Nginx 反代）</small>
+    </div>
+
+    <!-- WebSocket / XHTTP Fields -->
+    <div id="ws-xhttp-fields" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "ws") (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="path">路径</label>
+            <input type="text" id="path" name="path" value="{{if .Inbound}}{{.Inbound.Path}}{{else}}/{{end}}"
+                placeholder="/ws 或 /xhttp">
+            <small class="form-hint">WebSocket/XHTTP 路径</small>
+        </div>
+        <div class="form-group">
+            <label for="host">Host (可选)</label>
+            <input type="text" id="host" name="host" value="{{if .Inbound}}{{.Inbound.Host}}{{end}}"
+                placeholder="example.com">
+            <small class="form-hint">Host 头，通常留空</small>
+        </div>
+    </div>
+
+    <!-- gRPC Fields -->
+    <div id="grpc-fields" style="display: {{if and .Inbound (eq .Inbound.Transport "grpc")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="service_name">服务名</label>
+            <input type="text" id="service_name" name="service_name" value="{{if .Inbound}}{{.Inbound.ServiceName}}{{end}}"
+                placeholder="grpc-service">
+            <small class="form-hint">gRPC 服务名称</small>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="domain_id">域名</label>
+        <select id="domain_id" name="domain_id">
+            <option value="">无</option>
+            {{range .Domains}}
+            <option value="{{.ID}}" {{if and $.Inbound (eq $.Inbound.DomainID .ID)}}selected{{end}}>
+                {{.Domain}}
+            </option>
+            {{end}}
+        </select>
+        <small class="form-hint">关联域名（Nginx 使用此域名的证书）</small>
+    </div>
+
+    <div class="form-group">
+        <label for="remark">备注</label>
+        <textarea id="remark" name="remark" rows="2">{{if .Inbound}}{{.Inbound.Remark}}{{end}}</textarea>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" onclick="closeModal()" class="btn">取消</button>
+        <button type="submit" class="btn btn-primary">
+            {{if .Inbound}}更新{{else}}创建{{end}}
+        </button>
+    </div>
+</form>
+
+<script>
+    function toggleTransportFields(transport) {
+        const wsXhttpFields = document.getElementById('ws-xhttp-fields');
+        const grpcFields = document.getElementById('grpc-fields');
+        
+        if (transport === 'grpc') {
+            wsXhttpFields.style.display = 'none';
+            grpcFields.style.display = 'block';
+        } else {
+            wsXhttpFields.style.display = 'block';
+            grpcFields.style.display = 'none';
+        }
+    }
+</script>
+{{end}}

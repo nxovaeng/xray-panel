@@ -1,0 +1,36 @@
+{{define "components/domain-form.html"}}
+<form hx-post="/api/domains{{if .Domain}}/{{.Domain.ID}}{{end}}" hx-target="#domains-table" hx-swap="innerHTML">
+
+    <div class="form-group">
+        <label for="domain">域名</label>
+        <input type="text" id="domain" name="domain" value="{{if .Domain}}{{.Domain.Domain}}{{end}}"
+            placeholder="example.com" required>
+    </div>
+
+    <div class="form-group">
+        <label for="cert_path">证书路径</label>
+        <input type="text" id="cert_path" name="cert_path" value="{{if .Domain}}{{.Domain.CertPath}}{{end}}"
+            placeholder="/etc/letsencrypt/live/example.com/fullchain.pem" required>
+    </div>
+
+    <div class="form-group">
+        <label for="key_path">密钥路径</label>
+        <input type="text" id="key_path" name="key_path" value="{{if .Domain}}{{.Domain.KeyPath}}{{end}}"
+            placeholder="/etc/letsencrypt/live/example.com/privkey.pem" required>
+    </div>
+
+    <div class="form-group">
+        <button type="button" hx-get="/api/domains/scan-certs" hx-target="#cert-scan-results" class="btn btn-sm">
+            🔍 扫描证书
+        </button>
+        <div id="cert-scan-results"></div>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" onclick="closeModal()" class="btn">取消</button>
+        <button type="submit" class="btn btn-primary">
+            {{if .Domain}}更新{{else}}创建{{end}}
+        </button>
+    </div>
+</form>
+{{end}}

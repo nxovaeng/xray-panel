@@ -1,0 +1,87 @@
+{{define "components/dashboard-stats.html"}}
+<!-- 用户统计 -->
+<div class="stat-card">
+    <div class="stat-icon">
+        <i data-lucide="users"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.TotalUsers}}</div>
+        <div class="stat-label">总用户</div>
+    </div>
+</div>
+
+<div class="stat-card">
+    <div class="stat-icon" style="color: var(--success); background: rgba(16, 185, 129, 0.1);">
+        <i data-lucide="user-check"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.ActiveUsers}}</div>
+        <div class="stat-label">活跃用户</div>
+    </div>
+</div>
+
+<div class="stat-card">
+    <div class="stat-icon" style="color: var(--warning); background: rgba(245, 158, 11, 0.1);">
+        <i data-lucide="server"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.TotalInbounds}}</div>
+        <div class="stat-label">入站节点</div>
+    </div>
+</div>
+
+<div class="stat-card">
+    <div class="stat-icon" style="color: #a855f7; background: rgba(168, 85, 247, 0.1);">
+        <i data-lucide="activity"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.TotalTraffic}}</div>
+        <div class="stat-label">总流量</div>
+    </div>
+</div>
+
+<!-- 系统信息 -->
+<div class="stat-card">
+    <div class="stat-icon" style="color: #3b82f6; background: rgba(59, 130, 246, 0.1);">
+        <i data-lucide="cpu"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.CPUUsage}}</div>
+        <div class="stat-label">CPU 使用率 ({{.CPUCores}} 核)</div>
+    </div>
+</div>
+
+<div class="stat-card">
+    <div class="stat-icon" style="color: #10b981; background: rgba(16, 185, 129, 0.1);">
+        <i data-lucide="memory-stick"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.MemPercent}}</div>
+        <div class="stat-label">内存使用 ({{.MemUsage}})</div>
+    </div>
+</div>
+
+<div class="stat-card">
+    <div class="stat-icon" style="color: #f59e0b; background: rgba(245, 158, 11, 0.1);">
+        <i data-lucide="hard-drive"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.DiskPercent}}</div>
+        <div class="stat-label">磁盘使用 ({{.DiskUsage}})</div>
+    </div>
+</div>
+
+<div class="stat-card">
+    <div class="stat-icon" style="color: #8b5cf6; background: rgba(139, 92, 246, 0.1);">
+        <i data-lucide="clock"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.Uptime}}</div>
+        <div class="stat-label">系统运行时间</div>
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+</script>
+{{end}}

@@ -1,0 +1,19 @@
+{{define "nav"}}
+<nav class="sidebar">
+    <div class="sidebar-header">
+        <h2>🚀 Xray 面板</h2>
+    </div>
+    <ul class="nav-menu">
+        <li><a href="/dashboard" class="{{if eq .Page "dashboard"}}active{{end}}">📊 仪表盘</a></li>
+        <li><a href="/users" class="{{if eq .Page "users"}}active{{end}}">👥 用户管理</a></li>
+        <li><a href="/inbounds" class="{{if eq .Page "inbounds"}}active{{end}}">📥 入站配置</a></li>
+        <li><a href="/outbounds" class="{{if eq .Page "outbounds"}}active{{end}}">📤 出站配置</a></li>
+        <li><a href="/routing" class="{{if eq .Page "routing"}}active{{end}}">🔀 路由规则</a></li>
+        <li><a href="/domains" class="{{if eq .Page "domains"}}active{{end}}">🌐 域名管理</a></li>
+        <li><a href="/settings" class="{{if eq .Page "settings"}}active{{end}}">⚙️ 系统设置</a></li>
+    </ul>
+    <div class="sidebar-footer">
+        <a href="/logout" class="btn btn-danger btn-block">退出登录</a>
+    </div>
+</nav>
+{{end}}

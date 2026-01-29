@@ -1,0 +1,126 @@
+{{define "routing"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Xray Panel</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    {{template "nav" .}}
+
+    <div class="content">
+        {{template "routing-content" .}}
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title"></h2>
+                <button class="modal-close" onclick="closeModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="notifications"></div>
+
+    <script src="/static/js/app.min.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>
+{{end}}
+
+{{define "routing-content"}}
+<div class="content-page">
+    <div class="page-header">
+        <h1>路由规则</h1>
+        <div style="display: flex; gap: 0.75rem;">
+            <div class="dropdown" style="position: relative;">
+                <button class="btn btn-outline" onclick="togglePresetMenu()" id="preset-btn">
+                    <i data-lucide="download"></i> 快捷导入
+                </button>
+                <div id="preset-menu" class="dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem; min-width: 200px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 100;">
+                    <div style="padding: 0.5rem 0.75rem; font-size: 0.85rem; color: var(--text-secondary); border-bottom: 1px solid var(--border); margin-bottom: 0.5rem;">
+                        预设规则模板
+                    </div>
+                    <button hx-post="/api/routing/preset/warp-china" 
+                        hx-target="#routing-table" 
+                        hx-swap="innerHTML"
+                        hx-on::after-request="closePresetMenu(); if(event.detail.successful) { showNotification('已导入 WARP 中国规则', 'success'); } else { showNotification('导入失败', 'error'); }"
+                        class="dropdown-item" style="width: 100%; text-align: left; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text); cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 0.5rem;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='none'">
+                        <span>🌏</span>
+                        <div>
+                            <div style="font-size: 0.9rem;">中国网站经 WARP</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">需要先创建 WARP 出站</div>
+                        </div>
+                    </button>
+                    <button hx-post="/api/routing/preset/warp-streaming" 
+                        hx-target="#routing-table" 
+                        hx-swap="innerHTML"
+                        hx-on::after-request="closePresetMenu(); if(event.detail.successful) { showNotification('已导入流媒体规则', 'success'); } else { showNotification('导入失败', 'error'); }"
+                        class="dropdown-item" style="width: 100%; text-align: left; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text); cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 0.5rem;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='none'">
+                        <span>📺</span>
+                        <div>
+                            <div style="font-size: 0.9rem;">流媒体经 WARP</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Netflix, YouTube 等</div>
+                        </div>
+                    </button>
+                    <button hx-post="/api/routing/preset/china-direct" 
+                        hx-target="#routing-table" 
+                        hx-swap="innerHTML"
+                        hx-on::after-request="closePresetMenu(); if(event.detail.successful) { showNotification('已导入中国直连规则', 'success'); } else { showNotification('导入失败', 'error'); }"
+                        class="dropdown-item" style="width: 100%; text-align: left; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text); cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 0.5rem;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='none'">
+                        <span>🚀</span>
+                        <div>
+                            <div style="font-size: 0.9rem;">中国网站直连</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">国内网站不走代理</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <button hx-get="/routing/new" hx-target="#modal-body" onclick="openModal('添加路由规则')" class="btn btn-primary">
+                <i data-lucide="plus"></i> 添加规则
+            </button>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div id="routing-table" hx-get="/api/routing/table" hx-trigger="load" hx-swap="innerHTML">
+            <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">加载中...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function togglePresetMenu() {
+        const menu = document.getElementById('preset-menu');
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    function closePresetMenu() {
+        document.getElementById('preset-menu').style.display = 'none';
+    }
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function(e) {
+        const btn = document.getElementById('preset-btn');
+        const menu = document.getElementById('preset-menu');
+        if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+            menu.style.display = 'none';
+        }
+    });
+</script>
+{{end}}

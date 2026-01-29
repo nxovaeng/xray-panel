@@ -1,0 +1,74 @@
+# Xray Panel 配置文件 - Linux 版本
+
+# Web 服务器配置
+server:
+  # 监听地址和端口
+  listen: "0.0.0.0:8082"
+  # 调试模式（生产环境设置为 false）
+  debug: false
+
+# 日志配置
+log:
+  # 日志等级: debug, info, warning, error
+  level: "info"
+  # 日志文件路径
+  file: "/var/log/xray-panel/panel.log"
+  # 单个日志文件最大大小（MB）
+  max_size: 100
+  # 保留的旧日志文件数量
+  max_backups: 10
+  # 保留旧日志文件的最大天数
+  max_age: 30
+  # 是否压缩旧日志文件
+  compress: true
+
+# 数据库配置
+database:
+  # SQLite 数据库文件路径（Linux 标准路径）
+  path: "/var/lib/xray-panel/panel.db"
+
+# JWT 认证配置
+jwt:
+  # JWT 密钥（生产环境请修改为随机字符串）
+  secret: "change-me-in-production-please-use-random-string"
+  # Token 过期时间（小时）
+  expire_hour: 168  # 7 days
+
+# 管理员账户配置
+admin:
+  # 管理员用户名（留空则自动生成）
+  username: ""
+  # 管理员密码（留空则自动生成强密码）
+  password: ""
+  # 管理员邮箱（可选）
+  email: ""
+
+# Xray 配置
+xray:
+  # Xray 可执行文件路径（官方安装脚本路径）
+  binary_path: "/usr/local/bin/xray"
+  # Xray 配置文件路径
+  config_path: "/usr/local/etc/xray/config.json"
+  # Xray 资源文件路径（geoip.dat, geosite.dat）
+  assets_path: "/usr/local/share/xray"
+  # Xray API 端口
+  api_port: 10085
+
+# Nginx 配置
+nginx:
+  # Nginx 配置目录
+  config_dir: "/etc/nginx/conf.d"
+  # Nginx Stream 配置目录（用于 SNI 路由）
+  stream_dir: "/etc/nginx/stream.d"
+  # Nginx 重载命令
+  reload_cmd: "systemctl reload nginx"
+  # SSL 证书目录（Let's Encrypt 默认路径）
+  cert_dir: "/etc/letsencrypt/live"
+
+# Linux 生产环境说明：
+# 1. 使用 systemd 管理服务：systemctl start xray-panel
+# 2. 数据库位于 /var/lib/xray-panel/
+# 3. 配置文件位于 /etc/xray-panel/config.yaml
+# 4. 日志通过 journalctl -u xray-panel 查看
+# 5. Xray 使用官方安装脚本的标准路径
+# 6. Nginx 用于 TLS 终止和反向代理

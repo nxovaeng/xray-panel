@@ -1,0 +1,58 @@
+{{define "inbounds"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Xray Panel</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    {{template "nav" .}}
+
+    <div class="content">
+        {{template "inbounds-content" .}}
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title"></h2>
+                <button class="modal-close" onclick="closeModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="notifications"></div>
+
+    <script src="/static/js/app.min.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>
+{{end}}
+
+{{define "inbounds-content"}}
+<div class="content-page">
+    <div class="page-header">
+        <h1>入站管理</h1>
+        <button hx-get="/inbounds/new" hx-target="#modal-body" onclick="openModal('添加入站')" class="btn btn-primary">
+            <i data-lucide="plus"></i> 添加入站
+        </button>
+    </div>
+
+    <div class="table-container">
+        <div id="inbounds-table" hx-get="/api/inbounds/table" hx-trigger="load" hx-swap="innerHTML">
+            <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">加载中...</div>
+        </div>
+    </div>
+</div>
+{{end}}

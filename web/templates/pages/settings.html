@@ -1,0 +1,198 @@
+{{define "settings"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - Xray 面板</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    {{template "nav" .}}
+
+    <main class="content">
+        <div class="content-page">
+            <div class="page-header">
+                <h1>⚙️ 系统设置</h1>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card" id="xray-status-card">
+                    <div class="stat-icon">
+                        <i data-lucide="activity"></i>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-value" id="xray-status-text">检测中...</div>
+                        <div class="stat-label">Xray 服务状态</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-grid"
+                style="display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">
+
+                <!-- Service Control -->
+                <div class="table-container" style="padding: 2rem;">
+                    <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i data-lucide="server"></i> 服务控制
+                    </h2>
+
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="restartXray()" id="btn-restart-xray">
+                            <i data-lucide="refresh-cw"></i> 重启 Xray
+                        </button>
+
+                        <button class="btn btn-warning" onclick="applyConfig()" id="btn-apply-config">
+                            <i data-lucide="save"></i> 应用配置 & 重启服务
+                        </button>
+                    </div>
+
+                    <div id="service-output" class="hidden"
+                        style="margin-top: 1.5rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 0.5rem; font-family: monospace;">
+                        <!-- Output log -->
+                    </div>
+                </div>
+
+                <!-- System Info (Placeholder) -->
+                <div class="table-container" style="padding: 2rem;">
+                    <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i data-lucide="info"></i> 系统信息
+                    </h2>
+
+                    <div class="form-group">
+                        <label>面板版本</label>
+                        <div style="padding: 0.5rem 0; color: var(--text-primary);">v1.0.0</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>当前时间</label>
+                        <div id="server-time" style="padding: 0.5rem 0; color: var(--text-primary);">
+                            {{ .Time }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Preview -->
+            <div class="table-container" style="padding: 2rem; margin-top: 2rem;">
+                <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i data-lucide="file-code"></i> 配置文件预览
+                </h2>
+
+                <div style="margin-bottom: 1rem;">
+                    <button class="btn btn-outline btn-sm" onclick="previewConfig('xray')">Xray 配置</button>
+                </div>
+
+                <pre id="config-preview"
+                    style="max-height: 500px; overflow-y: auto; padding: 1rem; white-space: pre-wrap;">点击按钮加载预览...</pre>
+            </div>
+
+        </div>
+    </main>
+
+    <div id="notification-container"></div>
+    <script src="/static/js/app.min.js"></script>
+    <script>
+        lucide.createIcons();
+
+        // Check status on load
+        fetch('/api/v1/xray/status', {
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        })
+            .then(res => res.json())
+            .then(data => {
+                const el = document.getElementById('xray-status-text');
+                if (data.data.active) {
+                    el.innerText = "运行中";
+                    el.style.color = "var(--success)";
+                } else {
+                    el.innerText = "已停止";
+                    el.style.color = "var(--danger)";
+                }
+            });
+
+        function restartXray() {
+            const btn = document.getElementById('btn-restart-xray');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 重启中...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            fetch('/api/v1/xray/restart', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('success', 'Xray 服务已重启');
+                    } else {
+                        showNotification('error', '重启失败: ' + data.error);
+                    }
+                })
+                .catch(err => showNotification('error', '请求失败'))
+                .finally(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    lucide.createIcons();
+                });
+        }
+
+        function applyConfig() {
+            const btn = document.getElementById('btn-apply-config');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 应用中...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            fetch('/api/v1/xray/apply', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('success', '配置已应用，服务已重启');
+                    } else {
+                        showNotification('error', '应用失败: ' + data.error);
+                    }
+                })
+                .catch(err => showNotification('error', '请求失败'))
+                .finally(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    lucide.createIcons();
+                });
+        }
+
+        function previewConfig(type) {
+            const pre = document.getElementById('config-preview');
+            pre.innerText = "加载中...";
+
+            fetch('/api/v1/xray/config', {
+                credentials: 'same-origin'  // 自动发送 cookie
+            })
+                .then(res => res.text())
+                .then(text => {
+                    // Formatting JSON
+                    try {
+                        const json = JSON.parse(text);
+                        pre.innerText = JSON.stringify(json, null, 2);
+                    } catch (e) {
+                        pre.innerText = text;
+                    }
+                })
+                .catch(err => {
+                    pre.innerText = "加载失败: " + err;
+                });
+        }
+    </script>
+</body>
+
+</html>
+{{end}}

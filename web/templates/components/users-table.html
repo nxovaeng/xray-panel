@@ -1,0 +1,216 @@
+{{define "components/users-table.html"}}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>用户 / 邮箱</th>
+            <th>UUID</th>
+            <th>流量使用</th>
+            <th>状态</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Users}}
+        <tr id="user-{{.ID}}">
+            <td>
+                <div style="font-weight: 600;">{{.Name}}</div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">{{.Email}}</div>
+            </td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <code style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{.UUID}}</code>
+                    <button class="copy-btn" onclick="copyToClipboard('{{.UUID}}')" title="复制">
+                        <i data-lucide="copy" style="width: 16px; height: 16px;"></i>
+                    </button>
+                </div>
+            </td>
+            <td style="min-width: 150px;">
+                <div style="font-size: 0.85rem; display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <span>{{formatBytes .TrafficUsed}}</span>
+                    <span style="color: var(--text-secondary);">/ {{formatBytes .TrafficLimit}}</span>
+                </div>
+                <div class="traffic-progress">
+                    <div class="traffic-progress-bar"
+                        style="width: {{calculatePercentage .TrafficUsed .TrafficLimit}}%"></div>
+                </div>
+            </td>
+            <td>
+                <span class="badge {{if .IsActive}}badge-success{{else}}badge-danger{{end}}">
+                    {{if .IsActive}}正常{{else}}禁用{{end}}
+                </span>
+            </td>
+            <td>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button onclick="toggleSubscription('{{.ID}}')" class="btn btn-sm btn-outline" title="查看订阅">
+                        <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                    </button>
+
+                    <button hx-get="/users/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑用户')"
+                        class="btn btn-sm btn-outline" title="编辑">
+                        <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
+                    </button>
+
+                    <button hx-delete="/api/users/{{.ID}}" hx-target="#user-{{.ID}}" hx-swap="outerHTML swap:0.5s"
+                        hx-confirm="确定删除此用户？" class="btn btn-sm btn-outline"
+                        style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);" title="删除">
+                        <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+        <!-- Subscription details row (hidden by default) -->
+        <tr id="sub-{{.ID}}" class="subscription-details" style="display: none;">
+            <td colspan="5" style="background: var(--bg-secondary); padding: 1.5rem;">
+                <div style="max-width: 800px;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);">
+                        <i data-lucide="link" style="width: 20px; height: 20px; color: var(--accent);"></i>
+                        <h3 style="margin: 0; font-size: 1rem; color: var(--text);">订阅信息</h3>
+                    </div>
+                    
+                    <!-- Subscription URL -->
+                    <div style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                            订阅链接
+                        </label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" 
+                                   id="sub-url-{{.ID}}" 
+                                   value="{{.SubURL}}" 
+                                   readonly 
+                                   style="flex: 1; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.85rem;"
+                                   onclick="this.select()">
+                            <button onclick="copyText('sub-url-{{.ID}}')" class="btn btn-sm btn-primary" title="复制">
+                                <i data-lucide="copy" style="width: 16px; height: 16px;"></i>
+                                复制
+                            </button>
+                        </div>
+                        <small style="display: block; margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
+                            在客户端中导入此链接以自动配置所有节点
+                        </small>
+                    </div>
+
+                    <!-- QR Code -->
+                    <div style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                            二维码
+                        </label>
+                        <div style="display: flex; gap: 1rem; align-items: flex-start;">
+                            <div id="qr-{{.ID}}" style="padding: 1rem; background: white; border-radius: 8px; display: inline-block;"></div>
+                            <div style="flex: 1;">
+                                <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary);">
+                                    使用客户端扫描二维码快速导入订阅
+                                </p>
+                                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                    <span style="padding: 0.25rem 0.5rem; background: rgba(99, 102, 241, 0.1); border-radius: 4px; font-size: 0.75rem; color: var(--accent);">
+                                        v2rayN
+                                    </span>
+                                    <span style="padding: 0.25rem 0.5rem; background: rgba(99, 102, 241, 0.1); border-radius: 4px; font-size: 0.75rem; color: var(--accent);">
+                                        Clash
+                                    </span>
+                                    <span style="padding: 0.25rem 0.5rem; background: rgba(99, 102, 241, 0.1); border-radius: 4px; font-size: 0.75rem; color: var(--accent);">
+                                        Shadowrocket
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Info -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; padding: 1rem; background: var(--bg); border-radius: 8px; border: 1px solid var(--border);">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">用户名</div>
+                            <div style="font-size: 0.9rem; color: var(--text); font-weight: 500;">{{.Name}}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">邮箱</div>
+                            <div style="font-size: 0.9rem; color: var(--text);">{{.Email}}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">创建时间</div>
+                            <div style="font-size: 0.9rem; color: var(--text);">{{.CreatedAt}}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">到期时间</div>
+                            <div style="font-size: 0.9rem; color: var(--text);">
+                                {{if .ExpiryDate}}{{.ExpiryDate}}{{else}}永久{{end}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </td>
+        </tr>
+        {{else}}
+        <tr>
+            <td colspan="5" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
+                <i data-lucide="users" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+                <div>暂无用户</div>
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+
+<!-- QR Code Library -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+<script>
+    // Re-initialize icons for dynamic content
+    lucide.createIcons();
+
+    // Store QR code instances
+    const qrCodes = {};
+
+    function toggleSubscription(userId) {
+        const detailsRow = document.getElementById('sub-' + userId);
+        const isVisible = detailsRow.style.display !== 'none';
+        
+        if (isVisible) {
+            // Hide
+            detailsRow.style.display = 'none';
+        } else {
+            // Show
+            detailsRow.style.display = 'table-row';
+            
+            // Generate QR code if not already generated
+            if (!qrCodes[userId]) {
+                const qrContainer = document.getElementById('qr-' + userId);
+                const subUrl = document.getElementById('sub-url-' + userId).value;
+                
+                // Clear container
+                qrContainer.innerHTML = '';
+                
+                // Generate QR code
+                qrCodes[userId] = new QRCode(qrContainer, {
+                    text: subUrl,
+                    width: 150,
+                    height: 150,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
+            
+            // Re-initialize icons
+            lucide.createIcons();
+        }
+    }
+
+    function copyText(elementId) {
+        const input = document.getElementById(elementId);
+        input.select();
+        navigator.clipboard.writeText(input.value).then(() => {
+            showNotification('订阅链接已复制', 'success');
+        }).catch(() => {
+            showNotification('复制失败', 'error');
+        });
+    }
+
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showNotification('已复制', 'success');
+        }).catch(() => {
+            showNotification('复制失败', 'error');
+        });
+    }
+</script>
+{{end}}

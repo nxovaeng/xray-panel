@@ -1,0 +1,70 @@
+{{define "dashboard"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Xray Panel</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    {{template "nav" .}}
+
+    <div class="content">
+        {{template "dashboard-content" .}}
+    </div>
+
+    <!-- Global modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title"></h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Notification container -->
+    <div id="notifications"></div>
+
+    <script src="/static/js/app.min.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
+{{end}}
+
+{{define "dashboard-content"}}
+<div class="content-page">
+    <div class="page-header">
+        <h1>仪表盘</h1>
+    </div>
+
+    <div class="stats-grid" hx-get="/api/dashboard/stats" hx-trigger="load, every 30s" hx-swap="innerHTML">
+        <div class="stat-card">
+            <div class="stat-value">加载中...</div>
+            <div class="stat-label">总用户数</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">加载中...</div>
+            <div class="stat-label">活跃用户</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">加载中...</div>
+            <div class="stat-label">入站数量</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">加载中...</div>
+            <div class="stat-label">总流量</div>
+        </div>
+    </div>
+</div>
+{{end}}

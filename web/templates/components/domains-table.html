@@ -1,0 +1,47 @@
+{{define "components/domains-table.html"}}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>域名</th>
+            <th>证书路径</th>
+            <th>密钥路径</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Domains}}
+        <tr id="domain-{{.ID}}">
+            <td>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <i data-lucide="globe" style="width: 16px; color: var(--text-secondary);"></i>
+                    <strong>{{.Domain}}</strong>
+                </div>
+            </td>
+            <td><code>{{.CertPath}}</code></td>
+            <td><code>{{.KeyPath}}</code></td>
+            <td>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button hx-get="/domains/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑域名')"
+                        class="btn btn-sm btn-outline" title="编辑">
+                        <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
+                    </button>
+                    <button hx-delete="/api/domains/{{.ID}}" hx-target="#domain-{{.ID}}" hx-swap="outerHTML swap:0.5s"
+                        hx-confirm="确定删除此域名？" class="btn btn-sm btn-outline"
+                        style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);" title="删除">
+                        <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+        {{else}}
+        <tr>
+            <td colspan="4" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
+                <i data-lucide="globe" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+                <div>暂无域名配置</div>
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+<script>lucide.createIcons();</script>
+{{end}}

@@ -1,0 +1,84 @@
+# Xray Panel 配置文件示例
+# 复制此文件为 config.yaml 并根据实际情况修改
+
+# Web 服务器配置
+server:
+  # 监听地址和端口
+  listen: "0.0.0.0:8082"
+  # 调试模式（生产环境请设置为 false）
+  debug: false
+
+# 日志配置
+log:
+  # 日志等级: debug, info, warning, error
+  # - debug: 详细调试信息（开发环境）
+  # - info: 一般信息（推荐）
+  # - warning: 警告信息
+  # - error: 只记录错误
+  level: "info"
+  
+  # 日志文件路径（留空则只输出到控制台）
+  # Linux: /var/log/xray-panel/panel.log
+  # Windows: logs/panel.log
+  # macOS: ~/Library/Logs/xray-panel/panel.log
+  file: "/var/log/xray-panel/panel.log"
+  
+  # 单个日志文件最大大小（MB）
+  max_size: 100
+  
+  # 保留的旧日志文件数量
+  max_backups: 10
+  
+  # 保留旧日志文件的最大天数
+  max_age: 30
+  
+  # 是否压缩旧日志文件（gzip）
+  compress: true
+
+# 数据库配置
+database:
+  # SQLite 数据库文件路径
+  path: "/etc/xray-panel/panel.db"
+
+# JWT 认证配置
+jwt:
+  # JWT 密钥（生产环境请修改为随机字符串）
+  secret: "change-me-in-production-please-use-random-string"
+  # Token 过期时间（小时）
+  expire_hour: 24
+
+# 管理员账户配置
+admin:
+  # 管理员用户名（留空则自动生成，如: admin_abc123）
+  username: ""
+  # 管理员密码（留空则自动生成强密码，推荐）
+  password: ""
+  # 管理员邮箱（可选）
+  email: ""
+  # 注意：
+  # 1. 首次启动时，如果留空会自动生成随机凭据并输出到日志
+  # 2. 请妥善保存自动生成的凭据，它们不会再次显示
+  # 3. 如需自定义，请在首次启动前设置
+  # 4. 生产环境强烈建议使用自动生成的强密码
+
+# Xray 配置
+xray:
+  # Xray 可执行文件路径
+  binary_path: "/usr/local/bin/xray"
+  # Xray 配置文件路径（官方安装脚本使用此路径）
+  config_path: "/usr/local/etc/xray/config.json"
+  # Xray 资源文件路径（geoip.dat, geosite.dat）
+  assets_path: "/usr/local/share/xray"
+  # Xray API 端口
+  api_port: 10085
+
+# Nginx 配置（可选）
+nginx:
+  # Nginx 配置目录
+  config_dir: "/etc/nginx/conf.d"
+  # Nginx Stream 配置目录（用于 SNI 路由）
+  stream_dir: "/etc/nginx/stream.d"
+  # Nginx 重载命令
+  reload_cmd: "systemctl reload nginx"
+  # SSL 证书目录（Let's Encrypt 默认路径，也支持自定义证书）
+  cert_dir: "/etc/letsencrypt/live"

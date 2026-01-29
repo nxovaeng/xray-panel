@@ -1,0 +1,231 @@
+{{define "components/routing-form.html"}}
+<form hx-post="/api/routing{{if .Rule}}/{{.Rule.ID}}{{end}}" 
+      hx-target="#routing-table" 
+      hx-swap="innerHTML"
+      hx-on::after-request="if(event.detail.successful) { closeModal(); showNotification('路由规则已保存', 'success'); } else { showNotification('保存失败: ' + event.detail.xhr.responseText, 'error'); }">
+
+    <div class="form-group">
+        <label for="name">规则名称</label>
+        <input type="text" id="name" name="name" value="{{if .Rule}}{{.Rule.Name}}{{end}}" 
+               placeholder="我的路由规则" required>
+        <small class="form-hint">为此规则起一个易于识别的名称</small>
+    </div>
+
+    <div class="form-group">
+        <label for="type">规则类型</label>
+        <select id="type" name="type" required onchange="toggleRuleFields(this.value)">
+            <option value="inbound" {{if and .Rule (eq .Rule.Type "inbound")}}selected{{end}}>入站 (Inbound) - 匹配来源入站</option>
+            <option value="domain" {{if and .Rule (eq .Rule.Type "domain")}}selected{{end}}>域名列表 (Domain) - 匹配域名</option>
+            <option value="ip" {{if and .Rule (eq .Rule.Type "ip")}}selected{{end}}>IP列表 (IP) - 匹配IP地址</option>
+            <option value="geosite" {{if and .Rule (eq .Rule.Type "geosite")}}selected{{end}}>GeoSite - 匹配站点分类</option>
+            <option value="geoip" {{if and .Rule (eq .Rule.Type "geoip")}}selected{{end}}>GeoIP - 匹配国家/地区</option>
+            <option value="protocol" {{if and .Rule (eq .Rule.Type "protocol")}}selected{{end}}>协议 (Protocol) - 匹配协议类型</option>
+        </select>
+        <small class="form-hint">每条规则只能匹配一种类型</small>
+    </div>
+
+    <!-- Inbound Fields -->
+    <div id="inbound-fields" class="rule-fields" style="display: {{if or (not .Rule) (eq .Rule.Type "inbound")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="inbound_tag">选择入站</label>
+            <select id="inbound_tag" name="inbound_tag">
+                <option value="">请选择入站</option>
+                {{range .Inbounds}}
+                <option value="{{.Tag}}" {{if and $.Rule (eq $.Rule.InboundTag .Tag)}}selected{{end}}>
+                    {{.Tag}} ({{.Protocol}} / {{.Port}})
+                </option>
+                {{end}}
+            </select>
+            <small class="form-hint">匹配来自特定入站的流量，实现一对一映射</small>
+        </div>
+    </div>
+
+    <!-- Domain Fields -->
+    <div id="domain-fields" class="rule-fields" style="display: {{if and .Rule (eq .Rule.Type "domain")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="domains">域名列表</label>
+            <textarea id="domains" name="domains" rows="4" placeholder="domain:google.com&#10;full:www.baidu.com&#10;regexp:.*\.cn$">{{if .Rule}}{{.Rule.Domains}}{{end}}</textarea>
+            <small class="form-hint">
+                支持格式：<br>
+                • <code>domain:example.com</code> - 匹配域名及其子域名<br>
+                • <code>full:www.example.com</code> - 完全匹配<br>
+                • <code>regexp:.*\.cn$</code> - 正则表达式<br>
+                多个规则用逗号或换行分隔
+            </small>
+        </div>
+    </div>
+
+    <!-- IP Fields -->
+    <div id="ip-fields" class="rule-fields" style="display: {{if and .Rule (eq .Rule.Type "ip")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="ips">IP / CIDR 列表</label>
+            <textarea id="ips" name="ips" rows="4" placeholder="8.8.8.8&#10;192.168.1.0/24&#10;10.0.0.0/8">{{if .Rule}}{{.Rule.IPs}}{{end}}</textarea>
+            <small class="form-hint">
+                支持格式：<br>
+                • <code>8.8.8.8</code> - 单个IP地址<br>
+                • <code>192.168.0.0/16</code> - CIDR 网段<br>
+                多个规则用逗号或换行分隔
+            </small>
+        </div>
+    </div>
+
+    <!-- GeoSite Fields -->
+    <div id="geosite-fields" class="rule-fields" style="display: {{if and .Rule (eq .Rule.Type "geosite")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="geosite_tags">GeoSite 标签</label>
+            <input type="text" id="geosite_tags" name="geosite_tags" 
+                   value="{{if .Rule}}{{.Rule.GeoSiteTags}}{{end}}"
+                   placeholder="category-ads, cn, netflix, google">
+            <small class="form-hint">
+                常用标签：<br>
+                • <code>category-ads</code> - 广告域名<br>
+                • <code>cn</code> - 中国大陆网站<br>
+                • <code>geolocation-cn</code> - 中国大陆网站（更全）<br>
+                • <code>netflix, youtube, google</code> - 流媒体/服务<br>
+                多个标签用逗号分隔
+            </small>
+        </div>
+    </div>
+
+    <!-- GeoIP Fields -->
+    <div id="geoip-fields" class="rule-fields" style="display: {{if and .Rule (eq .Rule.Type "geoip")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="geoip_codes">GeoIP 国家代码</label>
+            <input type="text" id="geoip_codes" name="geoip_codes" 
+                   value="{{if .Rule}}{{.Rule.GeoIPCodes}}{{end}}"
+                   placeholder="cn, us, jp, private">
+            <small class="form-hint">
+                常用代码：<br>
+                • <code>cn</code> - 中国大陆<br>
+                • <code>us</code> - 美国<br>
+                • <code>private</code> - 私有网络 (192.168.x.x, 10.x.x.x)<br>
+                多个代码用逗号分隔，使用 ISO 3166-1 alpha-2 代码
+            </small>
+        </div>
+    </div>
+
+    <!-- Protocol Fields -->
+    <div id="protocol-fields" class="rule-fields" style="display: {{if and .Rule (eq .Rule.Type "protocol")}}block{{else}}none{{end}};">
+        <div class="form-group">
+            <label for="protocols">协议类型</label>
+            <input type="text" id="protocols" name="protocols" 
+                   value="{{if .Rule}}{{.Rule.Protocols}}{{end}}"
+                   placeholder="bittorrent, http, tls">
+            <small class="form-hint">
+                支持的协议：<br>
+                • <code>bittorrent</code> - BT 下载<br>
+                • <code>http</code> - HTTP 协议<br>
+                • <code>tls</code> - TLS/HTTPS<br>
+                多个协议用逗号分隔
+            </small>
+        </div>
+    </div>
+
+    <!-- Target Configuration -->
+    <div class="form-section" style="margin-top: 1.5rem;">
+        <h3 style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+            目标出站
+        </h3>
+
+        <div class="form-group">
+            <label for="outbound_tag">选择出站</label>
+            <select id="outbound_tag" name="outbound_tag" required>
+                <optgroup label="系统默认">
+                    <option value="direct" {{if and .Rule (eq .Rule.OutboundTag "direct")}}selected{{end}}>🚀 Direct (直连)</option>
+                    <option value="block" {{if and .Rule (eq .Rule.OutboundTag "block")}}selected{{end}}>🚫 Block (阻止)</option>
+                </optgroup>
+                {{if .Outbounds}}
+                <optgroup label="用户配置">
+                    {{range .Outbounds}}
+                    <option value="{{.Tag}}" {{if and $.Rule (eq $.Rule.OutboundTag .Tag)}}selected{{end}}>
+                        代理: {{.Tag}} ({{.Type}})
+                    </option>
+                    {{end}}
+                </optgroup>
+                {{end}}
+            </select>
+            <small class="form-hint">匹配此规则的流量将通过选定的出站发送</small>
+        </div>
+
+        <div class="form-group">
+            <label for="priority">优先级</label>
+            <input type="number" id="priority" name="priority" 
+                   value="{{if .Rule}}{{.Rule.Priority}}{{else}}100{{end}}" 
+                   min="1" max="1000" placeholder="100">
+            <small class="form-hint">数值越小优先级越高，建议范围 1-1000</small>
+        </div>
+
+        <div class="form-group">
+            <label for="remark">备注</label>
+            <textarea id="remark" name="remark" rows="2" placeholder="可选的备注信息">{{if .Rule}}{{.Rule.Remark}}{{end}}</textarea>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" onclick="closeModal()" class="btn">取消</button>
+        <button type="submit" class="btn btn-primary">
+            {{if .Rule}}更新{{else}}创建{{end}}
+        </button>
+    </div>
+</form>
+
+<script>
+    function toggleRuleFields(type) {
+        const inboundFields = document.getElementById('inbound-fields');
+        const domainFields = document.getElementById('domain-fields');
+        const ipFields = document.getElementById('ip-fields');
+        const geositeFields = document.getElementById('geosite-fields');
+        const geoipFields = document.getElementById('geoip-fields');
+        const protocolFields = document.getElementById('protocol-fields');
+        
+        if (!inboundFields || !domainFields || !ipFields || !geositeFields || !geoipFields || !protocolFields) return;
+        
+        // Hide all fields first
+        inboundFields.style.display = 'none';
+        domainFields.style.display = 'none';
+        ipFields.style.display = 'none';
+        geositeFields.style.display = 'none';
+        geoipFields.style.display = 'none';
+        protocolFields.style.display = 'none';
+        
+        // Remove required from all rule-specific fields
+        inboundFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
+        domainFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
+        ipFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
+        geositeFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
+        geoipFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
+        protocolFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
+        
+        // Show and set required for selected type
+        if (type === 'inbound') {
+            inboundFields.style.display = 'block';
+            document.getElementById('inbound_tag').setAttribute('required', 'required');
+        } else if (type === 'domain') {
+            domainFields.style.display = 'block';
+            document.getElementById('domains').setAttribute('required', 'required');
+        } else if (type === 'ip') {
+            ipFields.style.display = 'block';
+            document.getElementById('ips').setAttribute('required', 'required');
+        } else if (type === 'geosite') {
+            geositeFields.style.display = 'block';
+            document.getElementById('geosite_tags').setAttribute('required', 'required');
+        } else if (type === 'geoip') {
+            geoipFields.style.display = 'block';
+            document.getElementById('geoip_codes').setAttribute('required', 'required');
+        } else if (type === 'protocol') {
+            protocolFields.style.display = 'block';
+            document.getElementById('protocols').setAttribute('required', 'required');
+        }
+    }
+    
+    // Initialize immediately when script runs
+    (function() {
+        setTimeout(function() {
+            const typeSelect = document.getElementById('type');
+            if (typeSelect) {
+                toggleRuleFields(typeSelect.value);
+            }
+        }, 10);
+    })();
+</script>
+{{end}}

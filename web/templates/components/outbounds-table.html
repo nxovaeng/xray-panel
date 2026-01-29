@@ -1,0 +1,60 @@
+{{define "components/outbounds-table.html"}}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>标签</th>
+            <th>协议</th>
+            <th>连接详情</th>
+            <th>备注</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Outbounds}}
+        <tr id="outbound-{{.ID}}">
+            <td><code style="color: var(--accent); border-color: rgba(99, 102, 241, 0.2);">{{.Tag}}</code></td>
+            <td>
+                <span class="badge {{if eq .Type "socks5"}}badge-info{{else if eq .Type "wireguard"}}badge-success{{else if eq .Type "trojan"}}badge-warning{{else}}badge-secondary{{end}}">
+                    {{if eq .Type "socks5"}}SOCKS5{{else if eq .Type "wireguard"}}WireGuard{{else if eq .Type "trojan"}}Trojan{{else}}{{.Type}}{{end}}
+                </span>
+            </td>
+            <td style="font-family: monospace; font-size: 0.9rem; color: var(--text-secondary);">
+                {{if eq .Type "socks5"}}
+                    {{.Server}}:{{.Port}}
+                {{else if eq .Type "wireguard"}}
+                    {{.Server}}:{{.Port}}
+                {{else if eq .Type "trojan"}}
+                    {{.Server}}:{{.Port}}
+                {{else}}
+                    -
+                {{end}}
+            </td>
+            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                {{.Remark}}
+            </td>
+            <td>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button hx-get="/outbounds/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑出站')"
+                        class="btn btn-sm btn-outline" title="编辑">
+                        <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
+                    </button>
+                    <button hx-delete="/api/outbounds/{{.ID}}" hx-target="#outbound-{{.ID}}"
+                        hx-swap="outerHTML swap:0.5s" hx-confirm="确定删除此出站？" class="btn btn-sm btn-outline"
+                        style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);" title="删除">
+                        <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+        {{else}}
+        <tr>
+            <td colspan="5" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
+                <i data-lucide="send" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+                <div>暂无出站配置 (系统内置 Freedom/Blackhole 已自动启用)</div>
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+<script>lucide.createIcons();</script>
+{{end}}

@@ -1,0 +1,73 @@
+# Xray Panel 配置文件 - macOS 版本
+
+# Web 服务器配置
+server:
+  # 监听地址和端口
+  listen: "0.0.0.0:8082"
+  # 调试模式
+  debug: true
+
+# 日志配置
+log:
+  # 日志等级: debug, info, warning, error
+  level: "debug"
+  # 日志文件路径
+  file: "~/Library/Logs/xray-panel/panel.log"
+  # 单个日志文件最大大小（MB）
+  max_size: 50
+  # 保留的旧日志文件数量
+  max_backups: 5
+  # 保留旧日志文件的最大天数
+  max_age: 14
+  # 是否压缩旧日志文件
+  compress: true
+
+# 数据库配置
+database:
+  # SQLite 数据库文件路径（macOS 用户目录）
+  path: "~/Library/Application Support/xray-panel/panel.db"
+
+# JWT 认证配置
+jwt:
+  # JWT 密钥（生产环境请修改为随机字符串）
+  secret: "change-me-in-production-please-use-random-string"
+  # Token 过期时间（小时）
+  expire_hour: 168  # 7 days
+
+# 管理员账户配置
+admin:
+  # 管理员用户名（留空则自动生成）
+  username: ""
+  # 管理员密码（留空则自动生成强密码）
+  password: ""
+  # 管理员邮箱（可选）
+  email: ""
+
+# Xray 配置
+xray:
+  # Xray 可执行文件路径（Homebrew 安装路径）
+  binary_path: "/usr/local/bin/xray"
+  # Xray 配置文件路径
+  config_path: "/usr/local/etc/xray/config.json"
+  # Xray 资源文件路径
+  assets_path: "/usr/local/share/xray"
+  # Xray API 端口
+  api_port: 10085
+
+# Nginx 配置（macOS 可选）
+nginx:
+  # Nginx 配置目录（Homebrew 安装路径）
+  config_dir: "/usr/local/etc/nginx/servers"
+  # Nginx Stream 配置目录
+  stream_dir: "/usr/local/etc/nginx/stream.d"
+  # Nginx 重载命令
+  reload_cmd: "brew services reload nginx"
+  # SSL 证书目录
+  cert_dir: "/usr/local/etc/nginx/ssl"
+
+# macOS 开发环境说明：
+# 1. 使用 Homebrew 安装 Xray: brew install xray
+# 2. 数据库位于用户 Library 目录
+# 3. 使用 launchd 管理服务（或直接运行）
+# 4. Nginx 通过 Homebrew 安装和管理
+# 5. 开发时可以直接运行 ./panel

@@ -1,0 +1,73 @@
+# Xray Panel 配置文件 - Windows 版本
+
+# Web 服务器配置
+server:
+  # 监听地址和端口
+  listen: "0.0.0.0:8082"
+  # 调试模式
+  debug: true
+
+# 日志配置
+log:
+  # 日志等级: debug, info, warning, error
+  level: "info"
+  # 日志文件路径（留空则只输出到控制台）
+  file: "logs/panel.log"
+  # 单个日志文件最大大小（MB）
+  max_size: 100
+  # 保留的旧日志文件数量
+  max_backups: 3
+  # 保留旧日志文件的最大天数
+  max_age: 28
+  # 是否压缩旧日志文件
+  compress: true
+
+# 数据库配置
+database:
+  # SQLite 数据库文件路径（Windows 相对路径）
+  path: "data/panel.db"
+
+# JWT 认证配置
+jwt:
+  # JWT 密钥（生产环境请修改为随机字符串）
+  secret: "change-me-in-production-please-use-random-string"
+  # Token 过期时间（小时）
+  expire_hour: 168  # 7 days
+
+# 管理员账户配置
+admin:
+  # 管理员用户名（留空则自动生成）
+  username: ""
+  # 管理员密码（留空则自动生成强密码）
+  password: ""
+  # 管理员邮箱（可选）
+  email: ""
+
+# Xray 配置
+xray:
+  # Xray 可执行文件路径（Windows）
+  binary_path: "C:/Program Files/Xray/xray.exe"
+  # Xray 配置文件路径
+  config_path: "C:/Program Files/Xray/config.json"
+  # Xray 资源文件路径
+  assets_path: "C:/Program Files/Xray"
+  # Xray API 端口
+  api_port: 10085
+
+# Nginx 配置（Windows 可选）
+nginx:
+  # Nginx 配置目录
+  config_dir: "C:/nginx/conf/conf.d"
+  # Nginx Stream 配置目录
+  stream_dir: "C:/nginx/conf/stream.d"
+  # Nginx 重载命令（Windows 使用 nginx.exe）
+  reload_cmd: "nginx.exe -s reload"
+  # SSL 证书目录
+  cert_dir: "C:/nginx/conf/ssl"
+
+# Windows 开发环境说明：
+# 1. 数据库使用相对路径 data/panel.db，方便开发
+# 2. Xray 路径指向 Program Files（如果已安装）
+# 3. 如果使用便携版 Xray，请修改为实际路径
+# 4. Nginx 在 Windows 上较少使用，可以不配置
+# 5. 开发时可以直接运行 panel.exe，无需 systemd

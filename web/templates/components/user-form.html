@@ -1,0 +1,72 @@
+{{define "components/user-form.html"}}
+<form hx-post="/api/users{{if .User}}/{{.User.ID}}{{end}}" 
+      hx-target="#users-table" 
+      hx-swap="innerHTML"
+      hx-on::after-request="if(event.detail.successful) { closeModal(); showNotification('用户已保存', 'success'); } else { showNotification('保存失败: ' + event.detail.xhr.responseText, 'error'); }">
+
+    <div class="form-group">
+        <label for="name">用户名</label>
+        <input type="text" id="name" name="name" value="{{if .User}}{{.User.Name}}{{end}}" 
+               placeholder="用户的显示名称" required>
+        <small class="form-hint">用于识别用户，也会用作订阅文件名</small>
+    </div>
+
+    <div class="form-group">
+        <label for="email">邮箱</label>
+        <input type="email" id="email" name="email" value="{{if .User}}{{.User.Email}}{{end}}" 
+               placeholder="user@example.com" required>
+        <small class="form-hint">用于登录和通知</small>
+    </div>
+
+    <div class="form-group">
+        <label for="uuid">UUID</label>
+        <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="uuid" name="uuid" 
+                   value="{{if .User}}{{.User.UUID}}{{else}}{{.GeneratedUUID}}{{end}}"
+                   placeholder="自动生成或手动输入" required 
+                   style="flex: 1; font-family: monospace; font-size: 0.9rem;">
+            <button type="button" onclick="document.getElementById('uuid').value = generateUUID()" 
+                    class="btn btn-sm btn-outline" title="生成新 UUID">
+                <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+            </button>
+        </div>
+        <small class="form-hint">用户的唯一标识符，用于 VLESS/Trojan 连接</small>
+    </div>
+
+    <div class="form-group">
+        <label for="traffic_limit">流量限制 (GB)</label>
+        <input type="number" id="traffic_limit" name="traffic_limit" 
+               value="{{if .User}}{{bytesToGB .User.TrafficLimit}}{{else}}100{{end}}" 
+               min="0" step="1" placeholder="100">
+        <small class="form-hint">用户可使用的总流量，0 表示无限制</small>
+    </div>
+
+    <div class="form-group">
+        <label for="expiry_date">到期日期</label>
+        <input type="date" id="expiry_date" name="expiry_date" 
+               value="{{if .User}}{{if not .User.ExpiryDate.IsZero}}{{formatDate .User.ExpiryDate}}{{end}}{{end}}">
+        <small class="form-hint">留空表示永久有效</small>
+    </div>
+
+    <div class="form-group">
+        <label for="status">状态</label>
+        <select id="status" name="status">
+            <option value="active" {{if or (not .User) (eq .User.Status "active")}}selected{{end}}>✅ 启用</option>
+            <option value="disabled" {{if and .User (eq .User.Status "disabled")}}selected{{end}}>🚫 禁用</option>
+        </select>
+        <small class="form-hint">禁用后用户无法使用订阅</small>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" onclick="closeModal()" class="btn">取消</button>
+        <button type="submit" class="btn btn-primary">
+            {{if .User}}更新{{else}}创建{{end}}
+        </button>
+    </div>
+</form>
+
+<script>
+    // Re-initialize icons
+    if (window.lucide) lucide.createIcons();
+</script>
+{{end}}
