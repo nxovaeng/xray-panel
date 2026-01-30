@@ -55,7 +55,7 @@ check_root() {
 check_installed() {
     if [[ ! -f "$BINARY_PATH" ]]; then
         echo -e "${RED}错误: Xray Panel 未安装${PLAIN}"
-        echo -e "${YELLOW}请先运行安装脚本: bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install-online.sh)${PLAIN}"
+        echo -e "${YELLOW}请先运行安装脚本: bash <(curl -Ls https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/install-online.sh)${PLAIN}"
         exit 1
     fi
 }
@@ -140,7 +140,8 @@ update_panel() {
     check_installed
     echo -e "${BLUE}[INFO]${PLAIN} 开始更新 Xray Panel..."
     
-    bash <(curl -Ls https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/update.sh)
+    # 下载并执行在线安装脚本
+    bash <(curl -Ls "https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/update.sh")
 }
 
 # 3. 卸载
@@ -152,7 +153,7 @@ uninstall_panel() {
         return
     fi
     
-    bash <(curl -Ls https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/uninstall.sh)
+    bash <(curl -Ls "https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/uninstall.sh")
 }
 
 # 4. 启动

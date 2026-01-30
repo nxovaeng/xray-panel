@@ -175,33 +175,79 @@ download_panel() {
     log_info "下载地址: $DOWNLOAD_URL"
     
     # 下载并解压
-    cd /tmp
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
+    
     if wget -q --show-progress "$DOWNLOAD_URL" -O xray-panel.tar.gz; then
-        tar xzf xray-panel.tar.gz -C "$INSTALL_DIR"
+        tar xzf xray-panel.tar.gz
+        
+        # 查找解压后的目录（处理可能嵌套的结构）
+        EXTRACTED_DIR=$(find . -mindepth 1 -maxdepth 1 -type d | head -n 1)
+        if [[ -z "$EXTRACTED_DIR" ]]; then
+            # 如果没有目录，假设文件都在当前目录
+            EXTRACTED_DIR="."
+        fi
         
         # 查找二进制文件
-        BINARY=$(find "$INSTALL_DIR" -name "panel-linux-${ARCH}" -o -name "panel" | head -n 1)
+        BINARY=$(find "$EXTRACTED_DIR" -name "panel-linux-${ARCH}" -o -name "panel" | head -n 1)
         
         if [[ -n "$BINARY" ]]; then
-            mv "$BINARY" "$INSTALL_DIR/panel"
+            # 停止服务（如果正在运行）
+            systemctl stop xray-panel 2>/dev/null || true
+            
+            # 安装二进制文件
+            cp "$BINARY" "$INSTALL_DIR/panel"
             chmod +x "$INSTALL_DIR/panel"
-            log_success "面板下载完成"
+            
+            # 复制配置文件示例（如果存在）
+            if [[ -d "$EXTRACTED_DIR/conf" ]]; then
+                cp -r "$EXTRACTED_DIR/conf"/* "$CONFIG_DIR/" 2>/dev/null || true
+            fi
+            
+            # 复制 web 文件（如果存在）
+            if [[ -d "$EXTRACTED_DIR/web" ]]; then
+                cp -r "$EXTRACTED_DIR/web" "$INSTALL_DIR/" 2>/dev/null || true
+            fi
+            
+            # 复制管理脚本（如果存在）
+            if [[ -f "$EXTRACTED_DIR/xray-panel.sh" ]]; then
+                cp "$EXTRACTED_DIR/xray-panel.sh" "$INSTALL_DIR/" 2>/dev/null || true
+                chmod +x "$INSTALL_DIR/xray-panel.sh"
+            fi
+            
+            log_success "面板安装完成"
         else
             log_error "未找到二进制文件"
+            rm -rf "$TEMP_DIR"
             exit 1
         fi
         
-        rm -f xray-panel.tar.gz
+        rm -rf "$TEMP_DIR"
     else
         log_error "下载失败"
         log_info "请检查网络连接或使用本地安装脚本"
+        rm -rf "$TEMP_DIR"
         exit 1
     fi
 }
 
 # 生成配置文件
 generate_config() {
-    log_info "生成配置文件..."
+    log_info "检查配置文件..."
+    
+    if [[ -f "$CONFIG_DIR/config.yaml" ]]; then
+        log_info "配置文件已存在，跳过生成"
+        return
+    fi
+    
+    # 尝试使用示例配置
+    if [[ -f "$CONFIG_DIR/config.yaml.example" ]]; then
+        cp "$CONFIG_DIR/config.yaml.example" "$CONFIG_DIR/config.yaml"
+        log_success "已使用示例配置文件: $CONFIG_DIR/config.yaml"
+        return
+    fi
+    
+    log_info "生成默认配置文件..."
     
     # 生成随机 JWT Secret
     JWT_SECRET=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)
@@ -311,18 +357,33 @@ EOF
     log_info "日志文件权限已设置为所有用户可读"
 }
 
-# 下载管理脚本
-download_management_script() {
-    log_info "下载管理脚本..."
+# 安装管理脚本
+install_management_script() {
+    log_info "安装管理脚本..."
     
-    SCRIPT_URL="https://raw.githubusercontent.com/$GITHUB_REPO/master/xray-panel.sh"
+    # 查找解压后的 xray-panel.sh
+    # 注意：download_panel 中已经解压到了 EXTRACTED_DIR，但在 install_dependencies 后 TEMP_DIR 已经删除了
+    # 实际上 download_panel 逻辑需要调整，或者我们在 post-install 阶段处理
     
-    if wget -q "$SCRIPT_URL" -O /usr/local/bin/xray-panel.sh; then
+    # 由于 download_panel 函数中 TEMP_DIR 在安装后被删除了，我们需要在 download_panel 中处理，
+    # 或者修改 download_panel 将 extras 复制到安装目录
+    
+    # 检查安装目录中是否有 xray-panel.sh (如果我们在 download_panel 中复制了的话)
+    if [[ -f "$INSTALL_DIR/xray-panel.sh" ]]; then
+        ln -sf "$INSTALL_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
         chmod +x /usr/local/bin/xray-panel.sh
         ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
         log_success "管理脚本已安装"
     else
-        log_warning "管理脚本下载失败，可手动下载"
+        log_warning "未找到管理脚本，尝试在线下载..."
+        SCRIPT_URL="https://raw.githubusercontent.com/$GITHUB_REPO/master/xray-panel.sh"
+        if wget -q "$SCRIPT_URL" -O /usr/local/bin/xray-panel.sh; then
+            chmod +x /usr/local/bin/xray-panel.sh
+            ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
+            log_success "管理脚本已下载并安装"
+        else
+            log_warning "管理脚本下载失败"
+        fi
     fi
 }
 
@@ -395,7 +456,8 @@ EOF
     generate_config
     configure_nginx
     create_systemd_service
-    download_management_script
+    create_systemd_service
+    install_management_script
     
     show_complete
 }

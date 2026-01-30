@@ -93,6 +93,9 @@ jobs:
             mkdir -p "${PACKAGE}/scripts"
             cp ../scripts/*.sh "${PACKAGE}/scripts/" 2>/dev/null || true
             chmod +x "${PACKAGE}/scripts/"*.sh 2>/dev/null || true
+            # Copy management script
+            cp ../xray-panel.sh "${PACKAGE}/" 2>/dev/null || true
+            chmod +x "${PACKAGE}/xray-panel.sh" 2>/dev/null || true
             chmod +x "${PACKAGE}/${BINARY}"
           fi
           
@@ -188,9 +191,8 @@ jobs:
           
           ### 📚 Documentation
           
-          - [Installation Guide](https://github.com/${{ github.repository }}/blob/master/docs/installation.md)
+          - [Installation Guide](https://github.com/${{ github.repository }}/blob/master/docs/installation-guide.md)
           - [Configuration](https://github.com/${{ github.repository }}/blob/master/docs/configuration.md)
-          - [Building from Source](https://github.com/${{ github.repository }}/blob/master/docs/building.md)
           
           ### ⚠️ First Run
           

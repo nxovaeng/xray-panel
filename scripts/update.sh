@@ -142,6 +142,44 @@ backup_current() {
     log_success "备份已创建: $BACKUP_DIR"
 }
 
+# 安装依赖
+install_dependencies() {
+    log_info "检查依赖..."
+    
+    # 检测并安装缺失的依赖
+    local missing_deps=()
+    local deps=("curl" "wget" "unzip" "tar" "nginx" "sqlite3" "certbot")
+    
+    if [[ -f /etc/debian_version ]]; then
+        deps+=("python3-certbot-nginx")
+    elif [[ -f /etc/redhat-release ]]; then
+        deps+=("python3-certbot-nginx")
+    fi
+    
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            missing_deps+=("$dep")
+        fi
+    done
+    
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        log_info "安装缺失的依赖: ${missing_deps[*]}"
+        
+        if [[ -f /usr/bin/apt-get ]]; then
+            apt-get update
+            apt-get install -y "${missing_deps[@]}"
+        elif [[ -f /usr/bin/yum ]]; then
+            yum install -y epel-release
+            yum install -y "${missing_deps[@]}"
+        else
+            log_error "无法自动安装依赖，请手动安装: ${missing_deps[*]}"
+            exit 1
+        fi
+    else
+        log_success "所有依赖已安装"
+    fi
+}
+    
 stop_panel() {
     log_info "停止面板服务..."
     
@@ -173,25 +211,58 @@ download_new_version() {
     log_info "下载地址: $DOWNLOAD_URL"
     
     # 下载并解压
-    cd /tmp
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
+    
     if wget -q --show-progress "$DOWNLOAD_URL" -O xray-panel-new.tar.gz; then
         tar xzf xray-panel-new.tar.gz
         
+        # 查找解压后的目录（处理可能嵌套的结构）
+        EXTRACTED_DIR=$(find . -mindepth 1 -maxdepth 1 -type d | head -n 1)
+        if [[ -z "$EXTRACTED_DIR" ]]; then
+            EXTRACTED_DIR="."
+        fi
+        
         # 查找二进制文件
-        BINARY=$(find . -name "panel-linux-${ARCH}" -o -name "panel" | head -n 1)
+        BINARY=$(find "$EXTRACTED_DIR" -name "panel-linux-${ARCH}" -o -name "panel" | head -n 1)
         
         if [[ -n "$BINARY" ]]; then
             chmod +x "$BINARY"
             mv "$BINARY" "$BINARY_PATH"
+            
+            # 更新 Web 资源（如果存在）
+            if [[ -d "$EXTRACTED_DIR/web" ]]; then
+                log_info "更新 Web 资源..."
+                rm -rf "$INSTALL_DIR/web"
+                cp -r "$EXTRACTED_DIR/web" "$INSTALL_DIR/"
+            fi
+            
+            # 更新配置示例
+            if [[ -d "$EXTRACTED_DIR/conf" ]]; then
+                cp "$EXTRACTED_DIR/conf/config.yaml.example" "$CONFIG_DIR/" 2>/dev/null || true
+            fi
+            
+            # 更新管理脚本
+            if [[ -f "$EXTRACTED_DIR/xray-panel.sh" ]]; then
+                log_info "更新管理脚本..."
+                cp "$EXTRACTED_DIR/xray-panel.sh" "$INSTALL_DIR/"
+                chmod +x "$INSTALL_DIR/xray-panel.sh"
+                ln -sf "$INSTALL_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
+                chmod +x /usr/local/bin/xray-panel.sh
+                ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
+            fi
+            
             log_success "新版本已安装"
         else
             log_error "未找到二进制文件"
+            rm -rf "$TEMP_DIR"
             exit 1
         fi
         
-        rm -f xray-panel-new.tar.gz
+        rm -rf "$TEMP_DIR"
     else
         log_error "下载失败"
+        rm -rf "$TEMP_DIR"
         exit 1
     fi
 }

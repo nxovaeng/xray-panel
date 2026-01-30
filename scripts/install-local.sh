@@ -110,11 +110,11 @@ install_dependencies() {
     case $OS in
         ubuntu|debian)
             apt-get update
-            apt-get install -y curl wget nginx sqlite3 certbot python3-certbot-nginx
+            apt-get install -y curl wget unzip tar nginx sqlite3 certbot python3-certbot-nginx
             ;;
         centos|rhel|rocky|almalinux)
             yum install -y epel-release
-            yum install -y curl wget nginx sqlite certbot python3-certbot-nginx
+            yum install -y curl wget unzip tar nginx sqlite certbot python3-certbot-nginx
             ;;
         *)
             log_error "不支持的操作系统: $OS"
@@ -286,9 +286,11 @@ EOF
 install_management_script() {
     log_info "安装管理脚本..."
     
-    # 如果本地有管理脚本，复制它
+    # 优先使用 release 包中的脚本
     if [[ -f "$CURRENT_DIR/xray-panel.sh" ]]; then
-        cp "$CURRENT_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
+        cp "$CURRENT_DIR/xray-panel.sh" "$INSTALL_DIR/"
+        chmod +x "$INSTALL_DIR/xray-panel.sh"
+        ln -sf "$INSTALL_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
         chmod +x /usr/local/bin/xray-panel.sh
         ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
         log_success "管理脚本已安装"
