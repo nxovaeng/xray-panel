@@ -1,5 +1,3 @@
-package main
-
 import (
 	"flag"
 	"fmt"
@@ -13,6 +11,8 @@ import (
 	"xray-panel/internal/config"
 	"xray-panel/internal/database"
 	"xray-panel/internal/logger"
+	"xray-panel/internal/models"
+	"xray-panel/internal/nginx"
 )
 
 var (
@@ -28,6 +28,11 @@ func main() {
 	username := flag.String("username", "", "Admin username (for reset-password)")
 	newPassword := flag.String("password", "", "New password (for reset-password)")
 	configPath := flag.String("config", "", "Path to configuration file (auto-detect if empty)")
+	nginxAction := flag.String("nginx", "", "Nginx action: 'sync' (regenerate all), 'reload', 'panel' (generate panel config)")
+	domain := flag.String("domain", "", "Domain for panel config (required for -nginx=panel)")
+	certPath := flag.String("cert", "", "Cert path for panel config (required for -nginx=panel)")
+	keyPath := flag.String("key", "", "Key path for panel config (required for -nginx=panel)")
+	
 	flag.Parse()
 
 	// Show version
@@ -57,6 +62,53 @@ func main() {
 	db, err := database.Init(cfg.Database.Path)
 	if err != nil {
 		logger.Fatal("Failed to initialize database: %v", err)
+	}
+
+	// Handle Nginx Actions
+	if *nginxAction != "" {
+		// Initialize Nginx generator
+		// Note: removed StreamDir as it's deprecated in our new design
+		ng := nginx.NewGenerator(cfg.Nginx.ConfigDir, cfg.Nginx.ReloadCmd)
+
+		switch *nginxAction {
+		case "sync":
+			logger.Info("Syncing Nginx configurations...")
+			// 1. Fetch inbounds from DB
+			// We need a way to get inbounds. Since we changed models but didn't check the DB logic, 
+			// let's assume we can traverse inbounds. 
+			// Wait, the main package doesn't have direct access to 'GetAllInbounds' easy function without initializing more.
+			// Let's check api.go or similar but simpler:
+			// Just use GORM to query.
+			var inbounds []models.Inbound
+			if err := db.Preload("Domain").Find(&inbounds).Error; err != nil {
+				logger.Fatal("Failed to query inbounds: %v", err)
+			}
+			if err := ng.GenerateHTTPConfig(inbounds); err != nil {
+				logger.Fatal("Failed to generate configs: %v", err)
+			}
+			logger.Info("Nginx configurations generated successfully.")
+
+		case "reload":
+			logger.Info("Reloading Nginx...")
+			if err := ng.Reload(); err != nil {
+				logger.Fatal("Failed to reload Nginx: %v", err)
+			}
+			logger.Info("Nginx reloaded successfully.")
+
+		case "panel":
+			if *domain == "" || *certPath == "" || *keyPath == "" {
+				logger.Fatal("Error: -domain, -cert, and -key are required for panel config generation")
+			}
+			logger.Info("Generating Nginx config for Panel (%s)...", *domain)
+			if err := ng.GeneratePanelConfig(*domain, *certPath, *keyPath, cfg.Server.Listen); err != nil {
+				logger.Fatal("Failed to generate panel config: %v", err)
+			}
+			logger.Info("Panel config generated. Please reload Nginx to apply.")
+
+		default:
+			logger.Fatal("Unknown nginx action: %s", *nginxAction)
+		}
+		os.Exit(0)
 	}
 
 	// Run auto migrations

@@ -307,7 +307,7 @@ logs_xray() {
 # 19. 配置 Nginx 反向代理
 configure_nginx() {
     check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 配置 Nginx 反向代理"
+    echo -e "${BLUE}[INFO]${PLAIN} 配置 Nginx 反向代理 (HTTPS)"
     echo ""
     
     read -p "请输入域名: " domain
@@ -317,123 +317,35 @@ configure_nginx() {
         return
     fi
     
-    panel_port=$(grep "listen:" "$CONFIG_DIR/config.yaml" | awk '{print $2}' | tr -d '"' | cut -d':' -f2)
+    echo -e "${YELLOW}[INFO]${PLAIN} 请确认您已申请了 SSL 证书"
     
-    echo ""
-    echo -e "${CYAN}选择配置类型:${PLAIN}"
-    echo "1. HTTP (仅用于测试，不安全)"
-    echo "2. HTTPS (推荐，需要先申请证书)"
-    read -p "请选择 [1-2]: " config_type
+     # 默认路径猜测
+    default_cert="/etc/letsencrypt/live/$domain/fullchain.pem"
+    default_key="/etc/letsencrypt/live/$domain/privkey.pem"
     
-    if [[ "$config_type" == "2" ]]; then
-        # HTTPS 配置
-        read -p "请输入证书路径 (默认: /etc/letsencrypt/live/$domain/fullchain.pem): " cert_path
-        read -p "请输入私钥路径 (默认: /etc/letsencrypt/live/$domain/privkey.pem): " key_path
-        
-        cert_path=${cert_path:-/etc/letsencrypt/live/$domain/fullchain.pem}
-        key_path=${key_path:-/etc/letsencrypt/live/$domain/privkey.pem}
-        
-        # 检查证书文件
-        if [[ ! -f "$cert_path" ]] || [[ ! -f "$key_path" ]]; then
-            echo -e "${RED}[ERROR]${PLAIN} 证书文件不存在"
-            echo -e "${YELLOW}[INFO]${PLAIN} 请先申请 SSL 证书（选项 20 或 21）"
-            return
-        fi
-        
-        cat > /etc/nginx/conf.d/xray-panel.conf <<EOF
-# Xray Panel Web Interface - HTTPS
-# HTTP to HTTPS redirect
-server {
-    listen 80;
-    listen [::]:80;
-    server_name $domain;
-    return 301 https://\$host\$request_uri;
-}
-
-# HTTPS server
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name $domain;
+    read -p "请输入证书路径 (默认: $default_cert): " cert_path
+    read -p "请输入私钥路径 (默认: $default_key): " key_path
     
-    # SSL Configuration
-    ssl_certificate $cert_path;
-    ssl_certificate_key $key_path;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
+    cert_path=${cert_path:-$default_cert}
+    key_path=${key_path:-$default_key}
     
-    # Security Headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    
-    location / {
-        proxy_pass http://127.0.0.1:$panel_port;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        # WebSocket support (for htmx if needed)
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        
-        # Timeouts
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-    
-    # Logging
-    access_log /var/log/nginx/xray-panel.access.log;
-    error_log /var/log/nginx/xray-panel.error.log;
-}
-EOF
-        
-        echo -e "${GREEN}[SUCCESS]${PLAIN} HTTPS 配置完成"
-        echo -e "${YELLOW}[INFO]${PLAIN} 访问地址: https://$domain"
-    else
-        # HTTP 配置（仅用于测试）
-        cat > /etc/nginx/conf.d/xray-panel.conf <<EOF
-# Xray Panel Web Interface - HTTP (Testing Only)
-# ⚠️  WARNING: This is insecure! Please configure HTTPS for production use.
-
-server {
-    listen 80;
-    listen [::]:80;
-    server_name $domain;
-    
-    location / {
-        proxy_pass http://127.0.0.1:$panel_port;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        # WebSocket support (for htmx if needed)
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-    
-    # Logging
-    access_log /var/log/nginx/xray-panel.access.log;
-    error_log /var/log/nginx/xray-panel.error.log;
-}
-EOF
-        
-        echo -e "${YELLOW}[WARNING]${PLAIN} HTTP 配置完成（不安全）"
-        echo -e "${YELLOW}[INFO]${PLAIN} 访问地址: http://$domain"
-        echo -e "${RED}[WARNING]${PLAIN} 生产环境请使用 HTTPS！"
+    # 检查证书文件
+    if [[ ! -f "$cert_path" ]] || [[ ! -f "$key_path" ]]; then
+        echo -e "${RED}[ERROR]${PLAIN} 证书文件不存在"
+        echo -e "${YELLOW}[INFO]${PLAIN} 请先申请 SSL 证书（选项 20 或 21）"
+        return
     fi
     
-    nginx -t && systemctl reload nginx
-    echo -e "${GREEN}[SUCCESS]${PLAIN} Nginx 配置完成"
+    cd "$INSTALL_DIR"
+    ./panel -nginx=panel -domain="$domain" -cert="$cert_path" -key="$key_path"
+    
+    if [[ $? -eq 0 ]]; then
+         ./panel -nginx=reload
+         echo -e "${GREEN}[SUCCESS]${PLAIN} Nginx 配置完成"
+         echo -e "${YELLOW}[INFO]${PLAIN} 访问地址: https://$domain"
+    else
+         echo -e "${RED}[ERROR]${PLAIN} Nginx 配置失败"
+    fi
 }
 
 # 20. 申请 SSL 证书
