@@ -15,9 +15,9 @@ PLAIN='\033[0m'
 
 # Configuration
 INSTALL_DIR="/opt/xray-panel"
-CONFIG_DIR="/etc/xray-panel"
-DATA_DIR="/var/lib/xray-panel"
-LOG_DIR="/var/log/xray-panel"
+CONFIG_DIR="${INSTALL_DIR}/conf"
+DATA_DIR="${INSTALL_DIR}/data"
+LOG_DIR="${INSTALL_DIR}/logs"
 SYSTEMD_SERVICE="/etc/systemd/system/xray-panel.service"
 
 log_info() {
@@ -90,14 +90,13 @@ remove_systemd_service() {
 }
 
 remove_binary() {
-    log_info "Removing panel binary..."
+    log_info "移除面板文件..."
     
-    rm -f /usr/local/bin/xray-panel
+    # 移除管理脚本
+    rm -f /usr/local/bin/xray-panel.sh
+    rm -f /usr/bin/xray-panel
     
-    if [[ -d "$INSTALL_DIR" ]]; then
-        rm -rf "$INSTALL_DIR"
-        log_success "Panel binary removed"
-    fi
+    log_success "面板文件已移除"
 }
 
 remove_nginx_config() {
@@ -145,22 +144,20 @@ backup_data() {
 }
 
 clean_data() {
-    read -p "Do you want to remove data, config, and logs? (yes/no): " -r
+    read -p "是否删除所有数据和配置? (yes/no): " -r
     echo ""
     
     if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
-        log_warning "Removing all data..."
+        log_warning "删除所有数据..."
         
-        rm -rf "$DATA_DIR"
-        rm -rf "$CONFIG_DIR"
-        rm -rf "$LOG_DIR"
+        rm -rf "$INSTALL_DIR"
         
-        log_success "All data removed"
+        log_success "所有数据已删除"
     else
-        log_info "Data preserved at:"
-        echo -e "  - Database: $DATA_DIR"
-        echo -e "  - Config: $CONFIG_DIR"
-        echo -e "  - Logs: $LOG_DIR"
+        log_info "数据已保留在: $INSTALL_DIR"
+        echo -e "  - 数据库: $DATA_DIR"
+        echo -e "  - 配置: $CONFIG_DIR"
+        echo -e "  - 日志: $LOG_DIR"
     fi
 }
 
@@ -171,7 +168,7 @@ show_complete() {
     echo -e "${GREEN}========================================${PLAIN}"
     echo ""
     echo -e "${YELLOW}Remaining components:${PLAIN}"
-    echo -e "  - Xray-core (use: bash -c \"\$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)\" @ remove)"
+    echo -e "  - Xray-core (use: bash -c \"\$(curl -L https://github.com/XTLS/Xray-install/raw/master/install-release.sh)\" @ remove)"
     echo -e "  - Nginx (use: apt remove nginx / yum remove nginx)"
     echo ""
 }

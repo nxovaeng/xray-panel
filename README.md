@@ -13,67 +13,65 @@
 
 ## 快速开始
 
-### 1. 下载或编译
+### 方式一：一键安装（推荐）
 
-#### 从 Release 下载（推荐）
-
-访问 [Releases 页面](https://github.com/yourusername/xray-panel/releases) 下载适合你系统的版本：
-
-- **Linux AMD64**: `xray-panel-vX.X.X-linux-amd64.tar.gz`
-- **Linux ARM64**: `xray-panel-vX.X.X-linux-arm64.tar.gz`
-- **Windows AMD64**: `xray-panel-vX.X.X-windows-amd64.zip`
-- **Windows ARM64**: `xray-panel-vX.X.X-windows-arm64.zip`
-- **macOS Intel**: `xray-panel-vX.X.X-darwin-amd64.tar.gz`
-- **macOS Apple Silicon**: `xray-panel-vX.X.X-darwin-arm64.tar.gz`
-
-#### 本地编译
+适用于 Linux 服务器，自动安装所有依赖：
 
 ```bash
-# 当前平台
-go build -o panel ./cmd/panel
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install-online.sh)
+```
 
-# 所有平台（需要 Make）
-make build-all VERSION=v1.0.0
+安装完成后：
 
-# 或使用构建脚本
-# Linux/macOS
-./scripts/build-all.sh v1.0.0
+```bash
+# 启动服务
+systemctl start xray-panel
 
-# Windows
-scripts\build-all.bat v1.0.0
+# 查看管理员账户
+cd /opt/xray-panel
+./panel -show-admin
+
+# 使用管理脚本
+xray-panel
+```
+
+详细说明请查看 [快速开始](QUICK_START.md) 和 [安装指南](docs/installation-guide.md)
+
+### 方式二：本地安装
+
+适用于无网络或网络受限的服务器：
+
+1. 下载 [Release 包](https://github.com/yourusername/xray-panel/releases)
+2. 上传到服务器并解压
+3. 运行安装脚本：
+
+```bash
+tar xzf xray-panel-v1.0.0-linux-amd64.tar.gz
+cd xray-panel-v1.0.0-linux-amd64
+bash scripts/install-local.sh
+```
+
+### 方式三：开发环境
+
+适用于开发和测试：
+
+```bash
+# 克隆仓库
+git clone https://github.com/yourusername/xray-panel.git
+cd xray-panel
+
+# 安装依赖
+go mod download
+
+# 运行
+go run ./cmd/panel
+
+# 或编译后运行
+make build
+./dist/panel
 ```
 
 详细构建说明请查看 [BUILD_GUIDE.md](BUILD_GUIDE.md)
-
-### 2. 运行
-
-```bash
-# 自动检测操作系统并加载对应配置
-./panel
-
-# 或手动指定配置文件
-./panel -config /path/to/config.yaml
-```
-
-### 3. 访问
-
-```
-http://localhost:8082
-```
-
-**首次启动**会自动生成管理员账户，凭据会输出到控制台：
-
-```
-========================================
-🔐 初始管理员账户已创建
-========================================
-用户名: admin_k7m2p9
-密码:   Xy9mK2pL4nQ8rT6v
-========================================
-⚠️  请立即登录并修改密码！
-⚠️  请妥善保存这些凭据，它们不会再次显示！
-========================================
-```
 
 ## 配置文件
 
@@ -187,23 +185,51 @@ Xray (监听 127.0.0.1:10001+)
 - 简化 Xray 配置
 - 更好的性能和安全性
 
+## 便捷管理
+
+安装后可使用 `xray-panel` 命令打开管理菜单：
+
+```bash
+xray-panel
+```
+
+功能包括：
+- 🚀 启动/停止/重启服务
+- 📊 查看状态和日志
+- 🔐 管理员账户管理
+- 🔄 更新和备份
+- 🌐 Nginx 反向代理配置
+- 🔒 SSL 证书申请（支持通配符）
+- 📦 数据备份和恢复
+
+## 目录结构
+
+安装后所有文件统一在 `/opt/xray-panel`：
+
+```
+/opt/xray-panel/
+├── panel              # 主程序
+├── conf/              # 配置文件
+│   └── config.yaml
+├── data/              # 数据库
+│   └── panel.db
+└── logs/              # 日志
+    └── panel.log
+```
+
 ## 文档
 
-- [Workflows 对比](docs/workflows-comparison.md) - 选择合适的构建方式
-- [403 错误快速修复](QUICK_FIX_403.md) - 解决 GitHub Actions 权限问题
-- [GitHub Actions 故障排查](docs/github-actions-troubleshooting.md) - 详细的错误解决方案
-- [GitHub Actions 使用指南](docs/github-actions.md) - CI/CD 构建说明
+### 安装和部署
+- [快速开始](QUICK_START.md) - 5 分钟快速上手
+- [安装指南](docs/installation-guide.md) - 详细安装说明
+- [配置文件说明](docs/configuration.md) - 配置项详解
+
+### 构建和开发
 - [快速构建指南](BUILD_GUIDE.md) - 如何构建项目
-- [详细构建文档](docs/building.md) - 完整的构建说明
-- [安装文档](docs/installation.md) - 安装和部署指南
-- [配置文件说明](docs/configuration.md)
-- [日志系统文档](docs/logging.md)
-- [CLI 命令使用](docs/cli-commands.md)
-- [管理员账户安全](docs/admin-security.md)
-- [用户与入站关系](docs/user-inbound-relationship.md)
-- [订阅系统安全](docs/subscription-security.md)
-- [配置生成与部署](docs/config-deployment.md)
-- [故障排查](docs/troubleshooting.md)
+
+### 使用和管理
+- [CLI 命令使用](docs/cli-commands.md) - 命令行工具
+- [日志系统文档](docs/logging.md) - 日志配置
 
 
 ## CLI 命令

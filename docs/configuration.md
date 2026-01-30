@@ -304,21 +304,6 @@ jwt:
   secret: "your-random-secret-here"
 ```
 
-### Docker 环境
-
-1. 使用环境变量
-2. 挂载配置文件
-3. 持久化数据目录
-
-```bash
-docker run -d \
-  -v /path/to/config.yaml:/etc/xray-panel/config.yaml \
-  -v /path/to/data:/var/lib/xray-panel \
-  -p 8082:8082 \
-  xray-panel
-```
-
----
 
 ## 配置文件优先级
 

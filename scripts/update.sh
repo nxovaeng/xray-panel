@@ -27,9 +27,10 @@ PLAIN='\033[0m'
 
 # Configuration
 INSTALL_DIR="/opt/xray-panel"
-CONFIG_DIR="/etc/xray-panel"
-DATA_DIR="/var/lib/xray-panel"
-LOG_DIR="/var/log/xray-panel"
+CONFIG_DIR="${INSTALL_DIR}/conf"
+DATA_DIR="${INSTALL_DIR}/data"
+LOG_DIR="${INSTALL_DIR}/logs"
+BINARY_PATH="${INSTALL_DIR}/panel"
 
 # Detect GitHub repository
 detect_github_repo() {
@@ -94,11 +95,11 @@ detect_arch() {
 }
 
 get_current_version() {
-    if command -v xray-panel &> /dev/null; then
-        CURRENT_VERSION=$(xray-panel -version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "unknown")
-        log_info "Current version: $CURRENT_VERSION"
+    if [[ -f "$BINARY_PATH" ]]; then
+        CURRENT_VERSION=$("$BINARY_PATH" -version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "unknown")
+        log_info "当前版本: $CURRENT_VERSION"
     else
-        log_warning "Panel not installed"
+        log_warning "面板未安装"
         CURRENT_VERSION="not_installed"
     fi
 }
@@ -108,7 +109,9 @@ get_latest_version() {
     LATEST_VERSION=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep -oP '"tag_name": "\K(.*)(?=")')
     
     if [[ -z "$LATEST_VERSION" ]]; then
-        log_error "Failed to get latest version"
+        log_error "Failed to get latest version from GitHub API"
+        log_error "Repository: $GITHUB_REPO"
+        log_error "Please check your internet connection or try again later"
         exit 1
     fi
     
@@ -116,127 +119,128 @@ get_latest_version() {
 }
 
 backup_current() {
-    log_info "Creating backup..."
+    log_info "创建备份..."
     
     BACKUP_DIR="/root/xray-panel-backup-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$BACKUP_DIR"
     
-    # Backup binary
-    if [[ -f /usr/local/bin/xray-panel ]]; then
-        cp /usr/local/bin/xray-panel "$BACKUP_DIR/"
+    # 备份二进制文件
+    if [[ -f "$BINARY_PATH" ]]; then
+        cp "$BINARY_PATH" "$BACKUP_DIR/"
     fi
     
-    # Backup database
+    # 备份数据库
     if [[ -f "$DATA_DIR/panel.db" ]]; then
         cp "$DATA_DIR/panel.db" "$BACKUP_DIR/"
     fi
     
-    # Backup config
-    if [[ -f "$CONFIG_DIR/conf/config.yaml" ]]; then
-        cp "$CONFIG_DIR/conf/config.yaml" "$BACKUP_DIR/"
+    # 备份配置
+    if [[ -f "$CONFIG_DIR/config.yaml" ]]; then
+        cp "$CONFIG_DIR/config.yaml" "$BACKUP_DIR/"
     fi
     
-    log_success "Backup created at: $BACKUP_DIR"
+    log_success "备份已创建: $BACKUP_DIR"
 }
 
 stop_panel() {
-    log_info "Stopping panel service..."
+    log_info "停止面板服务..."
     
     if systemctl is-active --quiet xray-panel; then
         systemctl stop xray-panel
-        log_success "Panel service stopped"
+        log_success "面板服务已停止"
     fi
 }
 
 download_new_version() {
-    log_info "Downloading new version..."
+    log_info "下载新版本..."
     
-    # Get the actual version tag if using "latest"
+    # 获取版本
     if [[ "$PANEL_VERSION" == "latest" ]]; then
-        log_info "Fetching latest version..."
+        log_info "获取最新版本..."
         ACTUAL_VERSION=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep -oP '"tag_name": "\K(.*)(?=")')
         if [[ -z "$ACTUAL_VERSION" ]]; then
-            log_error "Failed to get latest version"
+            log_error "获取最新版本失败"
             exit 1
         fi
-        log_info "Latest version: $ACTUAL_VERSION"
+        log_info "最新版本: $ACTUAL_VERSION"
     else
         ACTUAL_VERSION="$PANEL_VERSION"
     fi
     
-    # Construct download URL with version in filename
+    # 构建下载 URL
     DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/${ACTUAL_VERSION}/xray-panel-${ACTUAL_VERSION}-linux-${ARCH}.tar.gz"
     
-    log_info "Downloading from: $DOWNLOAD_URL"
+    log_info "下载地址: $DOWNLOAD_URL"
     
-    # Download and extract
+    # 下载并解压
     cd /tmp
     if wget -q --show-progress "$DOWNLOAD_URL" -O xray-panel-new.tar.gz; then
         tar xzf xray-panel-new.tar.gz
         
-        # Find the binary
-        BINARY=$(find . -name "panel-linux-${ARCH}" -type f | head -n 1)
+        # 查找二进制文件
+        BINARY=$(find . -name "panel-linux-${ARCH}" -o -name "panel" | head -n 1)
         
         if [[ -n "$BINARY" ]]; then
             chmod +x "$BINARY"
-            mv "$BINARY" /usr/local/bin/xray-panel
-            log_success "New version installed"
+            mv "$BINARY" "$BINARY_PATH"
+            log_success "新版本已安装"
         else
-            log_error "Binary not found in archive"
+            log_error "未找到二进制文件"
             exit 1
         fi
         
         rm -f xray-panel-new.tar.gz
     else
-        log_error "Failed to download new version"
+        log_error "下载失败"
         exit 1
     fi
 }
 
 start_panel() {
-    log_info "Starting panel service..."
+    log_info "启动面板服务..."
     
     systemctl start xray-panel
     
-    # Wait for service to start
+    # 等待服务启动
     sleep 2
     
     if systemctl is-active --quiet xray-panel; then
-        log_success "Panel service started"
+        log_success "面板服务已启动"
     else
-        log_error "Failed to start panel service"
-        log_info "Check logs: journalctl -u xray-panel -n 50"
+        log_error "面板服务启动失败"
+        log_info "查看日志: journalctl -u xray-panel -n 50"
         exit 1
     fi
 }
 
 verify_update() {
-    log_info "Verifying update..."
+    log_info "验证更新..."
     
-    NEW_VERSION=$(xray-panel -version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "unknown")
+    NEW_VERSION=$("$BINARY_PATH" -version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "unknown")
     
     if [[ "$NEW_VERSION" != "$CURRENT_VERSION" ]]; then
-        log_success "Update successful!"
-        log_info "Old version: $CURRENT_VERSION"
-        log_info "New version: $NEW_VERSION"
+        log_success "更新成功！"
+        log_info "旧版本: $CURRENT_VERSION"
+        log_info "新版本: $NEW_VERSION"
     else
-        log_warning "Version unchanged"
+        log_warning "版本未变化"
     fi
 }
 
 show_complete() {
     echo ""
     echo -e "${GREEN}========================================${PLAIN}"
-    echo -e "${GREEN}  Update Complete!${PLAIN}"
+    echo -e "${GREEN}  更新完成！${PLAIN}"
     echo -e "${GREEN}========================================${PLAIN}"
     echo ""
-    echo -e "${CYAN}Panel Status:${PLAIN}"
+    echo -e "${CYAN}面板状态:${PLAIN}"
     systemctl status xray-panel --no-pager -l
     echo ""
-    echo -e "${YELLOW}Useful Commands:${PLAIN}"
-    echo -e "  View logs:     ${GREEN}journalctl -u xray-panel -f${PLAIN}"
-    echo -e "  Restart panel: ${GREEN}systemctl restart xray-panel${PLAIN}"
-    echo -e "  Panel status:  ${GREEN}systemctl status xray-panel${PLAIN}"
+    echo -e "${YELLOW}常用命令:${PLAIN}"
+    echo -e "  查看日志:     ${GREEN}journalctl -u xray-panel -f${PLAIN}"
+    echo -e "  重启面板:     ${GREEN}systemctl restart xray-panel${PLAIN}"
+    echo -e "  面板状态:     ${GREEN}systemctl status xray-panel${PLAIN}"
+    echo -e "  管理脚本:     ${GREEN}xray-panel${PLAIN}"
     echo ""
 }
 
