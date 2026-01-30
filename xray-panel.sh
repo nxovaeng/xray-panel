@@ -106,16 +106,13 @@ show_menu() {
     echo -e "${GREEN}18.${PLAIN} 查看 Xray 日志"
     echo " ————————————————"
     echo -e "${GREEN}19.${PLAIN} 配置 Nginx 反向代理"
-    echo -e "${GREEN}20.${PLAIN} 申请 SSL 证书"
-    echo -e "${GREEN}21.${PLAIN} 申请通配符证书"
-    echo -e "${GREEN}22.${PLAIN} 续期 SSL 证书"
     echo " ————————————————"
-    echo -e "${GREEN}23.${PLAIN} 备份数据"
-    echo -e "${GREEN}24.${PLAIN} 恢复数据"
-    echo -e "${GREEN}25.${PLAIN} 清理日志"
+    echo -e "${GREEN}20.${PLAIN} 备份数据"
+    echo -e "${GREEN}21.${PLAIN} 恢复数据"
+    echo -e "${GREEN}22.${PLAIN} 清理日志"
     echo " ————————————————"
     echo ""
-    read -p "请输入选择 [0-25]: " choice
+    read -p "请输入选择 [0-22]: " choice
     echo ""
 }
 
@@ -348,115 +345,7 @@ configure_nginx() {
     fi
 }
 
-# 20. 申请 SSL 证书
-apply_ssl() {
-    echo -e "${BLUE}[INFO]${PLAIN} 申请 SSL 证书"
-    echo ""
-    
-    read -p "请输入域名: " domain
-    read -p "请输入邮箱: " email
-    
-    if [[ -z "$domain" ]] || [[ -z "$email" ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 域名和邮箱不能为空"
-        return
-    fi
-    
-    certbot --nginx -d "$domain" --email "$email" --agree-tos --no-eff-email
-    
-    if [[ $? -eq 0 ]]; then
-        echo -e "${GREEN}[SUCCESS]${PLAIN} SSL 证书申请成功"
-    else
-        echo -e "${RED}[ERROR]${PLAIN} SSL 证书申请失败"
-    fi
-}
-
-# 21. 申请通配符证书
-apply_wildcard_ssl() {
-    echo -e "${BLUE}[INFO]${PLAIN} 申请通配符 SSL 证书"
-    echo ""
-    echo -e "${YELLOW}注意: 通配符证书需要 DNS 验证${PLAIN}"
-    echo ""
-    
-    read -p "请输入主域名 (例如: example.com): " domain
-    read -p "请输入邮箱: " email
-    
-    if [[ -z "$domain" ]] || [[ -z "$email" ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 域名和邮箱不能为空"
-        return
-    fi
-    
-    echo ""
-    echo -e "${CYAN}选择 DNS 提供商:${PLAIN}"
-    echo "1. Cloudflare"
-    echo "2. 阿里云 (Aliyun)"
-    echo "3. 腾讯云 (Tencent)"
-    echo "4. 手动 DNS 验证"
-    read -p "请选择 [1-4]: " dns_choice
-    
-    case $dns_choice in
-        1)
-            # Cloudflare
-            if ! command -v certbot &> /dev/null; then
-                apt-get install -y certbot python3-certbot-dns-cloudflare || yum install -y certbot python3-certbot-dns-cloudflare
-            fi
-            
-            read -p "请输入 Cloudflare API Token: " cf_token
-            
-            mkdir -p /root/.secrets
-            cat > /root/.secrets/cloudflare.ini <<EOF
-dns_cloudflare_api_token = $cf_token
-EOF
-            chmod 600 /root/.secrets/cloudflare.ini
-            
-            certbot certonly --dns-cloudflare \
-                --dns-cloudflare-credentials /root/.secrets/cloudflare.ini \
-                -d "$domain" -d "*.$domain" \
-                --email "$email" --agree-tos --no-eff-email
-            ;;
-        2)
-            # 阿里云
-            echo -e "${YELLOW}[INFO]${PLAIN} 阿里云 DNS 插件需要手动安装"
-            echo "参考: https://github.com/justjavac/certbot-dns-aliyun"
-            ;;
-        3)
-            # 腾讯云
-            echo -e "${YELLOW}[INFO]${PLAIN} 腾讯云 DNS 插件需要手动安装"
-            echo "参考: https://github.com/frefreak/certbot-dns-tencent"
-            ;;
-        4)
-            # 手动验证
-            certbot certonly --manual --preferred-challenges dns \
-                -d "$domain" -d "*.$domain" \
-                --email "$email" --agree-tos --no-eff-email
-            ;;
-        *)
-            echo -e "${RED}[ERROR]${PLAIN} 无效的选择"
-            return
-            ;;
-    esac
-    
-    if [[ $? -eq 0 ]]; then
-        echo -e "${GREEN}[SUCCESS]${PLAIN} 通配符证书申请成功"
-        echo -e "${YELLOW}[INFO]${PLAIN} 证书路径: /etc/letsencrypt/live/$domain/"
-    else
-        echo -e "${RED}[ERROR]${PLAIN} 证书申请失败"
-    fi
-}
-
-# 22. 续期证书
-renew_ssl() {
-    echo -e "${BLUE}[INFO]${PLAIN} 续期 SSL 证书..."
-    certbot renew
-    
-    if [[ $? -eq 0 ]]; then
-        echo -e "${GREEN}[SUCCESS]${PLAIN} 证书续期成功"
-        systemctl reload nginx
-    else
-        echo -e "${RED}[ERROR]${PLAIN} 证书续期失败"
-    fi
-}
-
-# 23. 备份数据
+# 20. 备份数据
 backup_data() {
     check_installed
     echo -e "${BLUE}[INFO]${PLAIN} 备份数据..."
@@ -481,7 +370,7 @@ backup_data() {
     echo -e "${GREEN}[SUCCESS]${PLAIN} 备份完成: $BACKUP_DIR.tar.gz"
 }
 
-# 24. 恢复数据
+# 21. 恢复数据
 restore_data() {
     check_installed
     echo -e "${BLUE}[INFO]${PLAIN} 恢复数据"
@@ -527,7 +416,7 @@ restore_data() {
     echo -e "${GREEN}[SUCCESS]${PLAIN} 数据恢复完成"
 }
 
-# 25. 清理日志
+# 22. 清理日志
 clean_logs() {
     check_installed
     echo -e "${BLUE}[INFO]${PLAIN} 清理日志..."
@@ -576,12 +465,9 @@ main() {
             17) status_xray ;;
             18) logs_xray ;;
             19) configure_nginx ;;
-            20) apply_ssl ;;
-            21) apply_wildcard_ssl ;;
-            22) renew_ssl ;;
-            23) backup_data ;;
-            24) restore_data ;;
-            25) clean_logs ;;
+            20) backup_data ;;
+            21) restore_data ;;
+            22) clean_logs ;;
             *)
                 echo -e "${RED}无效的选择${PLAIN}"
                 ;;

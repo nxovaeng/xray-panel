@@ -45,8 +45,9 @@
     <div class="page-header">
         <h1>域名管理</h1>
         <div style="display: flex; gap: 1rem;">
-            <button hx-get="/api/v1/domains/scan-certs" hx-swap="none" class="btn btn-warning">
-                <i data-lucide="scan"></i> 扫描证书
+            <button hx-post="/api/domains/scan-import" hx-target="#domains-table" hx-swap="innerHTML"
+                class="btn btn-success">
+                <i data-lucide="scan"></i> 扫描并导入证书
             </button>
             <button hx-get="/domains/new" hx-target="#modal-body" onclick="openModal('添加域名')" class="btn btn-primary">
                 <i data-lucide="plus"></i> 添加域名

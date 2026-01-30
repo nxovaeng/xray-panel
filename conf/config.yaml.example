@@ -80,5 +80,5 @@ nginx:
   stream_dir: "/etc/nginx/stream.d"
   # Nginx 重载命令
   reload_cmd: "systemctl reload nginx"
-  # SSL 证书目录（Let's Encrypt 默认路径，也支持自定义证书）
-  cert_dir: "/etc/letsencrypt/live"
+  # SSL 证书目录（acme.sh 默认路径，也支持自定义证书）
+  cert_dir: "/root/.acme.sh"

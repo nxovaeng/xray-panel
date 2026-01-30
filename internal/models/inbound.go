@@ -52,6 +52,9 @@ type Inbound struct {
 	// XHTTP specific
 	Mode string `json:"mode" form:"mode"` // auto, packet-up, stream-up (default: auto)
 
+	// Wildcard certificate support
+	ActualDomain string `json:"actual_domain" form:"actual_domain"` // Generated subdomain for wildcard certs (e.g., abc123.example.com)
+
 	Enabled   bool      `json:"enabled" form:"enabled" gorm:"default:true"`
 	Remark    string    `json:"remark" form:"remark"`
 	CreatedAt time.Time `json:"created_at" form:"created_at"`

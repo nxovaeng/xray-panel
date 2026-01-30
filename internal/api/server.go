@@ -146,6 +146,7 @@ func (s *Server) setupRoutes() {
 
 		// Domains
 		api.GET("/domains/table", s.webHandler.DomainsTable)
+		api.POST("/domains/scan-import", s.handleScanAndImportCertificates)
 		api.POST("/domains", s.webHandler.CreateDomain)
 		api.POST("/domains/:id", s.webHandler.UpdateDomain)
 		api.DELETE("/domains/:id", s.webHandler.DeleteDomain)
@@ -205,15 +206,19 @@ func (s *Server) setupRoutes() {
 				routing.DELETE("/:id", s.handleDeleteRoutingRule)
 			}
 
-			// Domains management
+		// Domains management
 			domains := protected.Group("/domains")
 			{
 				domains.GET("", s.handleListDomains)
 				domains.GET("/scan-certs", s.handleScanCertificates)
+				domains.POST("/scan-import", s.handleScanAndImportCertificates)
 				domains.POST("", s.handleCreateDomain)
 				domains.PUT("/:id", s.handleUpdateDomain)
 				domains.DELETE("/:id", s.handleDeleteDomain)
 			}
+
+			// Logout
+			protected.POST("/logout", s.handleLogout)
 
 			// Settings
 			protected.GET("/settings", s.handleGetSettings)

@@ -110,11 +110,11 @@ install_dependencies() {
     case $OS in
         ubuntu|debian)
             apt-get update
-            apt-get install -y curl wget unzip tar nginx sqlite3 certbot python3-certbot-nginx
+            apt-get install -y curl wget unzip tar nginx sqlite3
             ;;
         centos|rhel|rocky|almalinux)
             yum install -y epel-release
-            yum install -y curl wget unzip tar nginx sqlite certbot python3-certbot-nginx
+            yum install -y curl wget unzip tar nginx sqlite
             ;;
         *)
             log_error "不支持的操作系统: $OS"
@@ -207,7 +207,7 @@ xray:
 nginx:
   config_dir: "/etc/nginx/conf.d"
   reload_cmd: "systemctl reload nginx"
-  cert_dir: "/etc/letsencrypt/live"
+  cert_dir: "/root/.acme.sh"
 
 log:
   level: "info"

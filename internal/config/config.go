@@ -119,7 +119,7 @@ func Default() *Config {
 			ConfigDir: "/etc/nginx/conf.d",
 			StreamDir: "/etc/nginx/stream.d",
 			ReloadCmd: "systemctl reload nginx",
-			CertDir:   "/etc/letsencrypt/live",
+			CertDir:   "/root/.acme.sh",
 		},
 	}
 }

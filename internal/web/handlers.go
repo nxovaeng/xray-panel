@@ -1,8 +1,13 @@
 package web
 
 import (
+	cryptorand "crypto/rand"
 	"fmt"
+	"math/big"
 	"net/http"
+	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"xray-panel/internal/logger"
@@ -10,6 +15,7 @@ import (
 	"xray-panel/internal/system"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -427,6 +433,20 @@ func (h *Handler) CreateInbound(c *gin.Context) {
 		return
 	}
 
+	// Handle wildcard certificate: generate random subdomain
+	if inbound.DomainID != "" {
+		var domain models.Domain
+		if err := h.db.First(&domain, "id = ?", inbound.DomainID).Error; err == nil {
+			// Check if domain is a wildcard (starts with *.)
+			if strings.HasPrefix(domain.Domain, "*.") {
+				baseDomain := strings.TrimPrefix(domain.Domain, "*.")
+				subdomain := generateRandomSubdomain()
+				inbound.ActualDomain = subdomain + "." + baseDomain
+				logger.Info("Generated subdomain for wildcard cert: %s", inbound.ActualDomain)
+			}
+		}
+	}
+
 	if err := h.db.Create(&inbound).Error; err != nil {
 		logger.Error("Failed to create inbound %s: %v", inbound.Tag, err)
 		c.String(http.StatusInternalServerError, "Error creating inbound")
@@ -505,15 +525,28 @@ func (h *Handler) EditDomainForm(c *gin.Context) {
 func (h *Handler) CreateDomain(c *gin.Context) {
 	var domain models.Domain
 	if err := c.ShouldBind(&domain); err != nil {
-		c.String(http.StatusBadRequest, "Invalid input")
+		c.String(http.StatusBadRequest, "输入无效")
+		return
+	}
+
+	// Validate domain format
+	if !validateDomain(domain.Domain) {
+		c.String(http.StatusBadRequest, "域名格式无效")
+		return
+	}
+
+	// Validate certificate paths exist
+	if valid, errMsg := validateCertificatePaths(domain.CertPath, domain.KeyPath); !valid {
+		c.String(http.StatusBadRequest, errMsg)
 		return
 	}
 
 	if err := h.db.Create(&domain).Error; err != nil {
-		c.String(http.StatusInternalServerError, "Error creating domain")
+		c.String(http.StatusInternalServerError, "创建域名失败")
 		return
 	}
 
+	logger.Info("Domain created: %s", domain.Domain)
 	h.DomainsTable(c)
 }
 
@@ -521,15 +554,28 @@ func (h *Handler) UpdateDomain(c *gin.Context) {
 	id := c.Param("id")
 	var domain models.Domain
 	if err := c.ShouldBind(&domain); err != nil {
-		c.String(http.StatusBadRequest, "Invalid input")
+		c.String(http.StatusBadRequest, "输入无效")
+		return
+	}
+
+	// Validate domain format
+	if !validateDomain(domain.Domain) {
+		c.String(http.StatusBadRequest, "域名格式无效")
+		return
+	}
+
+	// Validate certificate paths exist
+	if valid, errMsg := validateCertificatePaths(domain.CertPath, domain.KeyPath); !valid {
+		c.String(http.StatusBadRequest, errMsg)
 		return
 	}
 
 	if err := h.db.Model(&models.Domain{}).Where("id = ?", id).Updates(&domain).Error; err != nil {
-		c.String(http.StatusInternalServerError, "Error updating domain")
+		c.String(http.StatusInternalServerError, "更新域名失败")
 		return
 	}
 
+	logger.Info("Domain updated: %s", domain.Domain)
 	h.DomainsTable(c)
 }
 
@@ -545,14 +591,53 @@ func (h *Handler) DeleteDomain(c *gin.Context) {
 
 // ============ Helper Functions ============
 
+// generateUUID generates a cryptographically secure UUID v4
 func generateUUID() string {
-	return fmt.Sprintf("%08x-%04x-4%03x-%04x-%012x",
-		time.Now().UnixNano()&0xffffffff,
-		time.Now().UnixNano()>>32&0xffff,
-		time.Now().UnixNano()>>48&0xfff,
-		time.Now().UnixNano()>>60&0xffff,
-		time.Now().UnixNano()&0xffffffffffff,
-	)
+	return uuid.New().String()
+}
+
+// generateRandomSubdomain generates a cryptographically secure random 6-8 character subdomain
+func generateRandomSubdomain() string {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	// Generate random length between 6 and 8
+	lengthBig, _ := cryptorand.Int(cryptorand.Reader, big.NewInt(3))
+	length := int(lengthBig.Int64()) + 6 // 6, 7, or 8 characters
+
+	b := make([]byte, length)
+	for i := range b {
+		num, _ := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[num.Int64()]
+	}
+	return string(b)
+}
+
+// domainRegex validates domain name format
+var domainRegex = regexp.MustCompile(`^(\*\.)?([a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$`)
+
+// validateDomain checks if a domain name is valid
+func validateDomain(domain string) bool {
+	if domain == "" {
+		return false
+	}
+	// Allow wildcard domains like *.example.com
+	return domainRegex.MatchString(domain)
+}
+
+// validateCertificatePaths checks if certificate and key files exist
+func validateCertificatePaths(certPath, keyPath string) (bool, string) {
+	if certPath == "" || keyPath == "" {
+		return false, "证书路径和密钥路径不能为空"
+	}
+
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		return false, fmt.Sprintf("证书文件不存在: %s", certPath)
+	}
+
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		return false, fmt.Sprintf("密钥文件不存在: %s", keyPath)
+	}
+
+	return true, ""
 }
 
 // ============ Outbounds API ============

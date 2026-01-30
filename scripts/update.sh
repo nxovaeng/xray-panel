@@ -148,12 +148,12 @@ install_dependencies() {
     
     # 检测并安装缺失的依赖
     local missing_deps=()
-    local deps=("curl" "wget" "unzip" "tar" "nginx" "sqlite3" "certbot")
+    local deps=("curl" "wget" "unzip" "tar" "nginx" "sqlite3")
     
     if [[ -f /etc/debian_version ]]; then
-        deps+=("python3-certbot-nginx")
+        : # No additional deps needed
     elif [[ -f /etc/redhat-release ]]; then
-        deps+=("python3-certbot-nginx")
+        : # No additional deps needed
     fi
     
     for dep in "${deps[@]}"; do

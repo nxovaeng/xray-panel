@@ -235,6 +235,18 @@ func (s *Server) handleWebLogout(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/login")
 }
 
+// handleLogout handles API logout (clears cookie and returns JSON)
+func (s *Server) handleLogout(c *gin.Context) {
+	// Get username for logging if available
+	if username, exists := c.Get("username"); exists {
+		logger.Info("Admin logged out via API: %s", username)
+	}
+
+	// Clear session cookie
+	c.SetCookie("session_token", "", -1, "/", "", false, true)
+	jsonOK(c, gin.H{"message": "Logged out successfully"})
+}
+
 // getAdminID returns the current admin ID from context
 func getAdminID(c *gin.Context) string {
 	adminID, _ := c.Get("admin_id")
