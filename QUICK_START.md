@@ -16,7 +16,7 @@ systemctl start xray-panel
 
 ```bash
 cd /opt/xray-panel
-./panel -show-admin
+./panel admin
 ```
 
 ## 访问面板
@@ -67,7 +67,7 @@ journalctl -u xray-panel -f
 
 # 重置密码
 cd /opt/xray-panel
-./panel -reset-password -username=admin_xxx -password=NewPassword123
+./panel reset-password -username=admin_xxx -password=NewPassword123
 ```
 
 ## 目录结构

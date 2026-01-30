@@ -116,7 +116,7 @@ journalctl -u xray-panel -f
 
 ```bash
 cd /opt/xray-panel
-./panel -show-admin
+./panel admin
 ```
 
 输出示例：
@@ -133,7 +133,7 @@ cd /opt/xray-panel
 
 ========================================
 💡 提示:
-  - 如需重置密码，使用: ./panel -reset-password -username=<用户名> -password=<新密码>
+  - 如需重置密码，使用: ./panel reset-password -username=<用户名> -password=<新密码>
   - 密码已加密存储，无法直接查看
 ========================================
 ```
@@ -361,13 +361,13 @@ systemctl disable xray-panel
 ```bash
 # 查看管理员信息
 cd /opt/xray-panel
-./panel -show-admin
+./panel admin
 
 # 重置密码
-./panel -reset-password -username=admin_xxx -password=NewPassword123
+./panel reset-password -username=admin_xxx -password=NewPassword123
 
 # 查看版本
-./panel -version
+./panel version
 ```
 
 ### 数据备份
@@ -472,7 +472,7 @@ netstat -tlnp | grep 8082
 
 ```bash
 cd /opt/xray-panel
-./panel -reset-password -username=admin_xxx -password=NewPassword123
+./panel reset-password -username=admin_xxx -password=NewPassword123
 ```
 
 ### 数据库损坏

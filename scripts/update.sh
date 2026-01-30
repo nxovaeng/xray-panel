@@ -96,7 +96,7 @@ detect_arch() {
 
 get_current_version() {
     if [[ -f "$BINARY_PATH" ]]; then
-        CURRENT_VERSION=$("$BINARY_PATH" -version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "unknown")
+        CURRENT_VERSION=$("$BINARY_PATH" version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "unknown")
         log_info "当前版本: $CURRENT_VERSION"
     else
         log_warning "面板未安装"
@@ -287,7 +287,7 @@ start_panel() {
 verify_update() {
     log_info "验证更新..."
     
-    NEW_VERSION=$("$BINARY_PATH" -version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "unknown")
+    NEW_VERSION=$("$BINARY_PATH" version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "unknown")
     
     if [[ "$NEW_VERSION" != "$CURRENT_VERSION" ]]; then
         log_success "更新成功！"

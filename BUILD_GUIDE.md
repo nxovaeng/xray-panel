@@ -60,7 +60,7 @@ GitHub Actions：Release 页面或 Artifacts
 
 ```bash
 # 查看版本
-./panel-linux-amd64 -version
+./panel-linux-amd64 version
 
 # 验证 SHA256
 sha256sum -c panel-linux-amd64.sha256

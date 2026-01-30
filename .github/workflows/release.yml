@@ -198,7 +198,7 @@ jobs:
           
           Admin credentials are auto-generated on first run. View them with:
           ```bash
-          ./panel-linux-amd64 -show-admin
+          ./panel-linux-amd64 admin
           ```
           
           **Change the password immediately after first login!**

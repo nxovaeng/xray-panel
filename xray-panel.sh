@@ -241,14 +241,14 @@ reset_admin() {
     fi
     
     cd "$INSTALL_DIR"
-    ./panel -reset-password -username="$username" -password="$password"
+    ./panel reset-password -username "$username" -password "$password"
 }
 
 # 12. 查看管理员信息
 show_admin() {
     check_installed
     cd "$INSTALL_DIR"
-    ./panel -show-admin
+    ./panel admin
 }
 
 # 13. 修改面板端口
@@ -337,10 +337,10 @@ configure_nginx() {
     fi
     
     cd "$INSTALL_DIR"
-    ./panel -nginx=panel -domain="$domain" -cert="$cert_path" -key="$key_path"
+    ./panel nginx panel -domain="$domain" -cert="$cert_path" -key="$key_path"
     
     if [[ $? -eq 0 ]]; then
-         ./panel -nginx=reload
+         ./panel nginx reload
          echo -e "${GREEN}[SUCCESS]${PLAIN} Nginx 配置完成"
          echo -e "${YELLOW}[INFO]${PLAIN} 访问地址: https://$domain"
     else

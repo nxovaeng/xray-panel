@@ -158,12 +158,6 @@ func (s *Server) handleApplyXrayConfig(c *gin.Context) {
 		return
 	}
 
-	// Generate Stream config (SNI routing)
-	if err := nginxGen.GenerateStreamConfig(inbounds); err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to generate Nginx Stream config: "+err.Error())
-		return
-	}
-
 	// 4. Restart services
 	// Restart Xray
 	xrayCmd := exec.Command("systemctl", "restart", "xray")

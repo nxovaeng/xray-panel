@@ -326,7 +326,7 @@ After=network.target nss-lookup.target
 Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/panel -config $CONFIG_DIR/config.yaml
+ExecStart=$INSTALL_DIR/panel server -config $CONFIG_DIR/config.yaml
 Restart=on-failure
 RestartSec=10
 LimitNOFILE=65536
@@ -404,7 +404,7 @@ show_complete() {
     echo -e "  2. 请先检查配置文件: ${GREEN}$CONFIG_DIR/config.yaml${PLAIN}"
     echo -e "  3. 确认配置无误后启动服务: ${GREEN}systemctl start xray-panel${PLAIN}"
     echo -e "  4. 首次启动会自动生成管理员账户"
-    echo -e "  5. 查看管理员信息: ${GREEN}cd $INSTALL_DIR && ./panel -show-admin${PLAIN}"
+    echo -e "  5. 查看管理员信息: ${GREEN}cd $INSTALL_DIR && ./panel admin${PLAIN}"
     echo ""
     echo -e "${CYAN}常用命令:${PLAIN}"
     echo -e "  启动面板:     ${GREEN}systemctl start xray-panel${PLAIN}"
@@ -416,7 +416,7 @@ show_complete() {
     echo ""
     echo -e "${CYAN}下一步操作:${PLAIN}"
     echo -e "  1. 启动服务: ${GREEN}systemctl start xray-panel${PLAIN}"
-    echo -e "  2. 查看管理员账户: ${GREEN}cd $INSTALL_DIR && ./panel -show-admin${PLAIN}"
+    echo -e "  2. 查看管理员账户: ${GREEN}cd $INSTALL_DIR && ./panel admin${PLAIN}"
     echo -e "  3. 配置 Nginx 反向代理 (可选)"
     echo -e "  4. 申请 SSL 证书 (推荐)"
     echo ""
