@@ -14,11 +14,11 @@
     <div class="form-group">
         <label for="type">规则类型</label>
         <select id="type" name="type" required onchange="toggleRuleFields(this.value)">
-            <option value="inbound" {{if and .Rule (eq .Rule.Type "inbound")}}selected{{end}}>入站 (Inbound) - 匹配来源入站</option>
             <option value="domain" {{if and .Rule (eq .Rule.Type "domain")}}selected{{end}}>域名列表 (Domain) - 匹配域名</option>
             <option value="ip" {{if and .Rule (eq .Rule.Type "ip")}}selected{{end}}>IP列表 (IP) - 匹配IP地址</option>
             <option value="geosite" {{if and .Rule (eq .Rule.Type "geosite")}}selected{{end}}>GeoSite - 匹配站点分类</option>
             <option value="geoip" {{if and .Rule (eq .Rule.Type "geoip")}}selected{{end}}>GeoIP - 匹配国家/地区</option>
+            <option value="inbound" {{if and .Rule (eq .Rule.Type "inbound")}}selected{{end}}>入站 (Inbound) - 匹配来源入站</option>
             <option value="protocol" {{if and .Rule (eq .Rule.Type "protocol")}}selected{{end}}>协议 (Protocol) - 匹配协议类型</option>
         </select>
         <small class="form-hint">每条规则只能匹配一种类型</small>

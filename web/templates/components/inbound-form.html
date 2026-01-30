@@ -25,9 +25,9 @@
     <div class="form-group">
         <label for="transport">传输协议</label>
         <select id="transport" name="transport" required onchange="toggleTransportFields(this.value)">
-            <option value="ws" {{if and .Inbound (eq .Inbound.Transport "ws")}}selected{{end}}>WebSocket</option>
-            <option value="grpc" {{if and .Inbound (eq .Inbound.Transport "grpc")}}selected{{end}}>gRPC</option>
             <option value="xhttp" {{if and .Inbound (eq .Inbound.Transport "xhttp")}}selected{{end}}>XHTTP (推荐)</option>
+            <option value="grpc" {{if and .Inbound (eq .Inbound.Transport "grpc")}}selected{{end}}>gRPC</option>
+            <option value="ws" {{if and .Inbound (eq .Inbound.Transport "ws")}}selected{{end}}>WebSocket</option>       
         </select>
         <small class="form-hint">传输层协议（均可被 Nginx 反代）</small>
     </div>

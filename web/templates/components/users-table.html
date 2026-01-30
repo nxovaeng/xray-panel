@@ -70,7 +70,7 @@
                     <!-- Subscription URL -->
                     <div style="margin-bottom: 1.25rem;">
                         <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                            订阅链接
+                            订阅链接 (Base64)
                         </label>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <input type="text" 
@@ -86,6 +86,42 @@
                         </div>
                         <small style="display: block; margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
                             在客户端中导入此链接以自动配置所有节点
+                        </small>
+                    </div>
+
+                    <!-- Plain Subscription Links -->
+                    <div style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                            订阅链接 (Plain 未加密)
+                        </label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                            <input type="text" 
+                                   id="sub-url-plain-{{.ID}}" 
+                                   value="{{.SubURL}}/plain" 
+                                   readonly 
+                                   style="flex: 1; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.85rem;"
+                                   onclick="this.select()">
+                            <button onclick="copyText('sub-url-plain-{{.ID}}')" class="btn btn-sm btn-outline" title="复制">
+                                <i data-lucide="copy" style="width: 16px; height: 16px;"></i>
+                                复制
+                            </button>
+                            <button onclick="loadPlainContent('{{.ID}}', '{{.SubURL}}/plain')" class="btn btn-sm btn-outline" title="查看内容">
+                                <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                                查看
+                            </button>
+                        </div>
+                        <div id="plain-content-{{.ID}}" style="display: none; margin-top: 0.75rem; padding: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <span style="font-size: 0.85rem; font-weight: 600; color: var(--text);">节点链接内容</span>
+                                <button onclick="copyPlainContent('{{.ID}}')" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem;">
+                                    <i data-lucide="copy" style="width: 14px; height: 14px;"></i>
+                                    复制全部
+                                </button>
+                            </div>
+                            <pre id="plain-text-{{.ID}}" style="margin: 0; padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 4px; font-family: monospace; font-size: 0.75rem; color: var(--text); overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto;">加载中...</pre>
+                        </div>
+                        <small style="display: block; margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
+                            未加密的节点链接，每行一个，可直接查看和复制
                         </small>
                     </div>
 
@@ -208,6 +244,57 @@
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
             showNotification('已复制', 'success');
+        }).catch(() => {
+            showNotification('复制失败', 'error');
+        });
+    }
+
+    function loadPlainContent(userId, url) {
+        const contentDiv = document.getElementById('plain-content-' + userId);
+        const textPre = document.getElementById('plain-text-' + userId);
+        
+        // Toggle visibility
+        if (contentDiv.style.display !== 'none') {
+            contentDiv.style.display = 'none';
+            return;
+        }
+        
+        contentDiv.style.display = 'block';
+        textPre.textContent = '加载中...';
+        
+        // Fetch plain content
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('加载失败');
+                }
+                return response.text();
+            })
+            .then(text => {
+                if (text.trim() === '') {
+                    textPre.textContent = '暂无节点';
+                } else {
+                    textPre.textContent = text;
+                }
+                // Re-initialize icons
+                lucide.createIcons();
+            })
+            .catch(error => {
+                textPre.textContent = '加载失败: ' + error.message;
+            });
+    }
+
+    function copyPlainContent(userId) {
+        const textPre = document.getElementById('plain-text-' + userId);
+        const text = textPre.textContent;
+        
+        if (text === '加载中...' || text === '暂无节点' || text.startsWith('加载失败')) {
+            showNotification('没有可复制的内容', 'error');
+            return;
+        }
+        
+        navigator.clipboard.writeText(text).then(() => {
+            showNotification('节点链接已复制', 'success');
         }).catch(() => {
             showNotification('复制失败', 'error');
         });
