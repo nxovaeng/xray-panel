@@ -150,14 +150,15 @@ func (s *Server) handleListDomains(c *gin.Context) {
 
 // CertificateInfo represents a discovered certificate with parsed info
 type CertificateInfo struct {
-	Domain       string    `json:"domain"`
+	Domain       string    `json:"domain"`        // 主域名（从目录名提取）
+	Domains      []string  `json:"domains"`       // 证书包含的所有域名（从证书解析）
 	CertPath     string    `json:"cert_path"`
 	KeyPath      string    `json:"key_path"`
-	ExpiryDate   time.Time `json:"expiry_date"`
-	DaysToExpiry int       `json:"days_to_expiry"`
-	Status       string    `json:"status"` // "正常" | "即将过期" | "已过期"
-	Issuer       string    `json:"issuer"`
-	IsWildcard   bool      `json:"is_wildcard"`
+	ExpiryDate   time.Time `json:"expiry_date"`   // 过期时间
+	DaysToExpiry int       `json:"days_to_expiry"` // 距离过期天数
+	Status       string    `json:"status"`        // "正常" | "即将过期" | "已过期"
+	Issuer       string    `json:"issuer"`        // 证书颁发者
+	IsWildcard   bool      `json:"is_wildcard"`   // 是否为通配符证书
 	Exists       bool      `json:"exists"`
 }
 
@@ -179,6 +180,53 @@ func parseCertificate(certPath string) (issuer string, expiry time.Time, err err
 	}
 
 	return cert.Issuer.CommonName, cert.NotAfter, nil
+}
+
+// parseCertificateDetails reads and parses detailed certificate info including wildcard detection
+func parseCertificateDetails(certPath string) (issuer string, expiry time.Time, domains []string, isWildcard bool, err error) {
+	data, err := os.ReadFile(certPath)
+	if err != nil {
+		return "", time.Time{}, nil, false, err
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return "", time.Time{}, nil, false, fmt.Errorf("failed to decode PEM block")
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", time.Time{}, nil, false, err
+	}
+
+	// Collect all domains from certificate
+	domains = make([]string, 0)
+	domainSet := make(map[string]bool) // 用于去重
+	
+	// Add Common Name if it's a domain
+	if cert.Subject.CommonName != "" {
+		domains = append(domains, cert.Subject.CommonName)
+		domainSet[cert.Subject.CommonName] = true
+	}
+	
+	// Add all Subject Alternative Names
+	for _, name := range cert.DNSNames {
+		if !domainSet[name] {
+			domains = append(domains, name)
+			domainSet[name] = true
+		}
+	}
+
+	// Check if it's a wildcard certificate
+	isWildcard = false
+	for _, domain := range domains {
+		if strings.HasPrefix(domain, "*.") {
+			isWildcard = true
+			break
+		}
+	}
+
+	return cert.Issuer.CommonName, cert.NotAfter, domains, isWildcard, nil
 }
 
 // getCertificateStatus returns status based on expiry date
@@ -207,6 +255,9 @@ func (s *Server) handleScanCertificates(c *gin.Context) {
 
 	var certificates []CertificateInfo
 
+	// Detect if this is an acme.sh directory
+	isAcmeShDir := strings.Contains(certDir, ".acme.sh") || strings.Contains(certDir, "acme.sh")
+
 	// Scan the certificate directory
 	entries, err := os.ReadDir(certDir)
 	if err != nil {
@@ -219,23 +270,59 @@ func (s *Server) handleScanCertificates(c *gin.Context) {
 			continue
 		}
 
-		domain := entry.Name()
+		dirName := entry.Name()
 
-		// Skip hidden directories and special directories
-		if strings.HasPrefix(domain, ".") || domain == "README" || domain == "ca" {
+		// Skip system directories
+		if dirName == "." || dirName == ".." {
 			continue
 		}
 
-		domainPath := filepath.Join(certDir, domain)
+		// If this is acme.sh directory, skip acme.sh's own directories
+		if isAcmeShDir {
+			// Skip acme.sh program directories and config files
+			skipDirs := []string{
+				"ca", "deploy", "dnsapi", "notify",
+			}
+			shouldSkip := false
+			for _, skip := range skipDirs {
+				if dirName == skip {
+					shouldSkip = true
+					break
+				}
+			}
+			if shouldSkip {
+				continue
+			}
+		} else {
+			// For non-acme.sh directories (like Let's Encrypt), skip common special dirs
+			if dirName == "README" || dirName == "ca" {
+				continue
+			}
+		}
+
+		domainPath := filepath.Join(certDir, dirName)
+
+		// Extract actual domain name from directory name
+		// acme.sh may append _ecc or _rsa suffix for different key types
+		// e.g., example.com_ecc, example.com_rsa, or just example.com
+		domain := dirName
+		
+		// Remove _ecc or _rsa suffix to get actual domain
+		if strings.HasSuffix(domain, "_ecc") {
+			domain = strings.TrimSuffix(domain, "_ecc")
+		} else if strings.HasSuffix(domain, "_rsa") {
+			domain = strings.TrimSuffix(domain, "_rsa")
+		}
 
 		// Try acme.sh structure first
 		// acme.sh stores certs as: /root/.acme.sh/<domain>/<domain>.cer or fullchain.cer
 		var certPath, keyPath string
 
 		// Check for acme.sh structure
-		acmeCertPath := filepath.Join(domainPath, domain+".cer")
+		// acme.sh uses the directory name (with suffix) for file names
+		acmeCertPath := filepath.Join(domainPath, dirName+".cer")
 		acmeFullchainPath := filepath.Join(domainPath, "fullchain.cer")
-		acmeKeyPath := filepath.Join(domainPath, domain+".key")
+		acmeKeyPath := filepath.Join(domainPath, dirName+".key")
 
 		if fileExists(acmeFullchainPath) {
 			certPath = acmeFullchainPath
@@ -264,30 +351,23 @@ func (s *Server) handleScanCertificates(c *gin.Context) {
 			continue
 		}
 
-		// Parse certificate info
-		issuer, expiry, parseErr := parseCertificate(certPath)
+		// Parse certificate details including wildcard detection
+		issuer, expiry, domains, isWildcard, parseErr := parseCertificateDetails(certPath)
 		status, daysToExpiry := getCertificateStatus(expiry)
+		
 		if parseErr != nil {
 			// If parsing fails, still add with basic info
 			issuer = "Unknown"
 			expiry = time.Time{}
+			domains = []string{domain} // 使用从目录名提取的域名
 			status = "未知"
 			daysToExpiry = 0
-		}
-
-		// Check if it's a wildcard certificate
-		isWildcard := strings.HasPrefix(domain, "_wildcard") || strings.HasPrefix(domain, "*.")
-		// Also check from certificate itself if we parsed it successfully
-		if parseErr == nil && !isWildcard {
-			// acme.sh uses _wildcard prefix for wildcard domains
-			// e.g., _wildcard.example.com for *.example.com
-			if strings.HasPrefix(domain, "_") {
-				isWildcard = true
-			}
+			isWildcard = false
 		}
 
 		certificates = append(certificates, CertificateInfo{
 			Domain:       domain,
+			Domains:      domains,
 			CertPath:     certPath,
 			KeyPath:      keyPath,
 			ExpiryDate:   expiry,
