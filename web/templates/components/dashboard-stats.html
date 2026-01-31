@@ -31,12 +31,22 @@
 </div>
 
 <div class="stat-card">
-    <div class="stat-icon" style="color: #a855f7; background: rgba(168, 85, 247, 0.1);">
-        <i data-lucide="activity"></i>
+    <div class="stat-icon" style="color: #22c55e; background: rgba(34, 197, 94, 0.1);">
+        <i data-lucide="upload"></i>
     </div>
     <div class="stat-info">
-        <div class="stat-value">{{.TotalTraffic}}</div>
-        <div class="stat-label">总流量</div>
+        <div class="stat-value">{{.NetUpload}}</div>
+        <div class="stat-label">上传流量</div>
+    </div>
+</div>
+
+<div class="stat-card">
+    <div class="stat-icon" style="color: #3b82f6; background: rgba(59, 130, 246, 0.1);">
+        <i data-lucide="download"></i>
+    </div>
+    <div class="stat-info">
+        <div class="stat-value">{{.NetDownload}}</div>
+        <div class="stat-label">下载流量</div>
     </div>
 </div>
 

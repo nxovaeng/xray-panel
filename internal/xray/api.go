@@ -6,13 +6,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 )
 
 // APIClient represents a client for Xray API
 type APIClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL    string
+	client     *http.Client
+	xrayBinary string
+	apiPort    int
 }
 
 // NewAPIClient creates a new Xray API client
@@ -22,7 +27,18 @@ func NewAPIClient(host string, port int) *APIClient {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		xrayBinary: "/usr/local/bin/xray",
+		apiPort:    port,
 	}
+}
+
+// NewAPIClientWithBinary creates a new Xray API client with custom binary path
+func NewAPIClientWithBinary(host string, port int, binaryPath string) *APIClient {
+	c := NewAPIClient(host, port)
+	if binaryPath != "" {
+		c.xrayBinary = binaryPath
+	}
+	return c
 }
 
 // AddUser adds a user to an inbound via API
@@ -59,30 +75,46 @@ func (c *APIClient) RemoveInbound(tag string) error {
 	return c.request("POST", "/handler/remove/inbound", payload)
 }
 
-// GetStats gets statistics for a user or inbound
+// GetStats gets statistics for a user or inbound using xray api command
+// name format: "user>>>email>>>traffic>>>downlink" or "user>>>email>>>traffic>>>uplink"
 func (c *APIClient) GetStats(name string, reset bool) (int64, error) {
-	payload := map[string]interface{}{
-		"name":  name,
-		"reset": reset,
+	args := []string{
+		"api", "stats",
+		"--server=127.0.0.1:" + strconv.Itoa(c.apiPort),
+		"-name", name,
+	}
+	if reset {
+		args = append(args, "-reset")
 	}
 
-	resp, err := c.requestWithResponse("POST", "/stats/query", payload)
+	cmd := exec.Command(c.xrayBinary, args...)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, err
+		// If the stat doesn't exist, xray returns an error, but that's okay
+		return 0, nil
 	}
 
-	// Parse response
-	var result struct {
-		Stat struct {
-			Value int64 `json:"value"`
-		} `json:"stat"`
+	// Parse output - format is like:
+	// stat: <
+	//   name: "user>>>test@example.com>>>traffic>>>downlink"
+	//   value: 12345
+	// >
+	outputStr := string(output)
+	lines := strings.Split(outputStr, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "value:") {
+			valueStr := strings.TrimPrefix(line, "value:")
+			valueStr = strings.TrimSpace(valueStr)
+			value, err := strconv.ParseInt(valueStr, 10, 64)
+			if err != nil {
+				return 0, nil
+			}
+			return value, nil
+		}
 	}
 
-	if err := json.Unmarshal(resp, &result); err != nil {
-		return 0, err
-	}
-
-	return result.Stat.Value, nil
+	return 0, nil
 }
 
 // RestartXray restarts Xray process (requires external script)
@@ -134,18 +166,11 @@ func (c *APIClient) requestWithResponse(method, path string, payload interface{}
 	return respBody, nil
 }
 
-// IsHealthy checks if Xray API is responding
+// IsHealthy checks if Xray API is responding using xray api command
 func (c *APIClient) IsHealthy() bool {
-	req, err := http.NewRequest("GET", c.baseURL+"/stats/query", nil)
-	if err != nil {
-		return false
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	return resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusBadRequest
+	// Try to query stats - if xray is running and API is enabled, this should work
+	cmd := exec.Command(c.xrayBinary, "api", "stats", "--server=127.0.0.1:"+strconv.Itoa(c.apiPort))
+	err := cmd.Run()
+	// Even if there are no stats, the command should succeed if xray is running
+	return err == nil
 }

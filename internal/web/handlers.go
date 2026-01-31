@@ -140,15 +140,7 @@ func (h *Handler) DashboardStats(c *gin.Context) {
 	var totalInbounds int64
 	h.db.Model(&models.Inbound{}).Where("enabled = ?", true).Count(&totalInbounds)
 
-	// Calculate total traffic
-	var users []models.User
-	h.db.Find(&users)
-	var totalTraffic int64
-	for _, u := range users {
-		totalTraffic += u.TrafficUsed
-	}
-
-	// Get system info
+	// Get system info (includes network traffic)
 	sysInfo, err := system.GetSystemInfo()
 	if err != nil {
 		// If system info fails, use defaults
@@ -157,10 +149,14 @@ func (h *Handler) DashboardStats(c *gin.Context) {
 
 	stats := struct {
 		// User stats
-		TotalUsers    int64  `json:"total_users"`
-		ActiveUsers   int64  `json:"active_users"`
-		TotalInbounds int64  `json:"total_inbounds"`
-		TotalTraffic  string `json:"total_traffic"`
+		TotalUsers    int64 `json:"total_users"`
+		ActiveUsers   int64 `json:"active_users"`
+		TotalInbounds int64 `json:"total_inbounds"`
+
+		// Network traffic (system-wide)
+		NetUpload   string `json:"net_upload"`
+		NetDownload string `json:"net_download"`
+		NetTotal    string `json:"net_total"`
 
 		// System stats
 		CPUUsage    string `json:"cpu_usage"`
@@ -175,7 +171,10 @@ func (h *Handler) DashboardStats(c *gin.Context) {
 		TotalUsers:    totalUsers,
 		ActiveUsers:   activeUsers,
 		TotalInbounds: totalInbounds,
-		TotalTraffic:  system.FormatBytes(uint64(totalTraffic)),
+
+		NetUpload:   system.FormatBytes(sysInfo.NetBytesSent),
+		NetDownload: system.FormatBytes(sysInfo.NetBytesRecv),
+		NetTotal:    system.FormatBytes(sysInfo.NetBytesSent + sysInfo.NetBytesRecv),
 
 		CPUUsage:    fmt.Sprintf("%.1f%%", sysInfo.CPUUsage),
 		CPUCores:    sysInfo.CPUCores,
