@@ -10,6 +10,7 @@ import (
 
 	xraypanel "xray-panel"
 	"xray-panel/internal/config"
+	"xray-panel/internal/nginx"
 	"xray-panel/internal/web"
 )
 
@@ -21,6 +22,7 @@ type Server struct {
 	embedFiles fs.FS
 	templates  *template.Template
 	webHandler *web.Handler
+	nginxGen   *nginx.ConfigGenerator
 }
 
 // NewServer creates a new API server
@@ -38,19 +40,27 @@ func NewServer(cfg *config.Config, db *gorm.DB) *Server {
 		panic("Failed to load templates: " + err.Error())
 	}
 
+	// Create Nginx config generator
+	nginxGen := nginx.NewGenerator(cfg.Nginx.ConfigDir, cfg.Nginx.StreamDir)
+	nginxGen.SetDB(db)
+	if cfg.Nginx.ReloadCmd != "" {
+		nginxGen.SetReloadCmd(cfg.Nginx.ReloadCmd)
+	}
+
 	s := &Server{
 		config:     cfg,
 		db:         db,
 		router:     gin.Default(),
 		embedFiles: webFS,
 		templates:  templates,
+		nginxGen:   nginxGen,
 	}
 
 	// Set HTML templates
 	s.router.SetHTMLTemplate(templates)
 
-	// Create web handler with DB
-	s.webHandler = web.NewHandler(db)
+	// Create web handler with DB and Nginx generator
+	s.webHandler = web.NewHandler(db, nginxGen)
 
 	s.setupRoutes()
 	return s
@@ -206,7 +216,7 @@ func (s *Server) setupRoutes() {
 				routing.DELETE("/:id", s.handleDeleteRoutingRule)
 			}
 
-		// Domains management
+			// Domains management
 			domains := protected.Group("/domains")
 			{
 				domains.GET("", s.handleListDomains)

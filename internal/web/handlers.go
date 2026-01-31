@@ -12,6 +12,7 @@ import (
 
 	"xray-panel/internal/logger"
 	"xray-panel/internal/models"
+	"xray-panel/internal/nginx"
 	"xray-panel/internal/system"
 
 	"github.com/gin-gonic/gin"
@@ -20,11 +21,12 @@ import (
 )
 
 type Handler struct {
-	db *gorm.DB
+	db    *gorm.DB
+	nginx *nginx.ConfigGenerator
 }
 
-func NewHandler(db *gorm.DB) *Handler {
-	return &Handler{db: db}
+func NewHandler(db *gorm.DB, nginxGen *nginx.ConfigGenerator) *Handler {
+	return &Handler{db: db, nginx: nginxGen}
 }
 
 // ============ Page Handlers ============
@@ -154,11 +156,11 @@ func (h *Handler) DashboardStats(c *gin.Context) {
 
 	stats := struct {
 		// User stats
-		TotalUsers   int64  `json:"total_users"`
-		ActiveUsers  int64  `json:"active_users"`
-		TotalInbounds int64 `json:"total_inbounds"`
-		TotalTraffic string `json:"total_traffic"`
-		
+		TotalUsers    int64  `json:"total_users"`
+		ActiveUsers   int64  `json:"active_users"`
+		TotalInbounds int64  `json:"total_inbounds"`
+		TotalTraffic  string `json:"total_traffic"`
+
 		// System stats
 		CPUUsage    string `json:"cpu_usage"`
 		CPUCores    int    `json:"cpu_cores"`
@@ -173,7 +175,7 @@ func (h *Handler) DashboardStats(c *gin.Context) {
 		ActiveUsers:   activeUsers,
 		TotalInbounds: totalInbounds,
 		TotalTraffic:  system.FormatBytes(uint64(totalTraffic)),
-		
+
 		CPUUsage:    fmt.Sprintf("%.1f%%", sysInfo.CPUUsage),
 		CPUCores:    sysInfo.CPUCores,
 		MemUsage:    fmt.Sprintf("%s / %s", system.FormatBytes(sysInfo.MemUsed), system.FormatBytes(sysInfo.MemTotal)),
@@ -204,11 +206,22 @@ func (h *Handler) UsersTable(c *gin.Context) {
 	}
 
 	// Get base URL from request
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
+	// 优先检查 X-Forwarded-Proto 头（当面板通过 Nginx 反代时）
+	scheme := c.GetHeader("X-Forwarded-Proto")
+	if scheme == "" {
+		if c.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
 	}
-	baseURL := scheme + "://" + c.Request.Host
+
+	// 获取主机名，优先使用 X-Forwarded-Host
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
+	}
+	baseURL := scheme + "://" + host
 
 	userViews := make([]UserView, len(users))
 	for i, u := range users {
@@ -282,7 +295,7 @@ func (h *Handler) CreateUser(c *gin.Context) {
 	// Set default values
 	user.CreatedAt = time.Now()
 	user.TrafficUsed = 0
-	
+
 	if err := h.db.Create(&user).Error; err != nil {
 		logger.Error("Failed to create user %s: %v", user.Email, err)
 		c.String(http.StatusInternalServerError, "Error creating user: "+err.Error())
@@ -295,7 +308,7 @@ func (h *Handler) CreateUser(c *gin.Context) {
 
 func (h *Handler) UpdateUser(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	// Get existing user
 	var existingUser models.User
 	if err := h.db.First(&existingUser, "id = ?", id).Error; err != nil {
@@ -346,13 +359,13 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 
 func (h *Handler) DeleteUser(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	// Get user info before deletion for logging
 	var user models.User
 	if err := h.db.First(&user, "id = ?", id).Error; err == nil {
 		logger.Info("User deleted: %s (UUID: %s)", user.Email, user.UUID)
 	}
-	
+
 	if err := h.db.Delete(&models.User{}, "id = ?", id).Error; err != nil {
 		logger.Error("Failed to delete user %s: %v", id, err)
 		c.String(http.StatusInternalServerError, "Error deleting user")
@@ -433,18 +446,31 @@ func (h *Handler) CreateInbound(c *gin.Context) {
 		return
 	}
 
-	// Handle wildcard certificate: generate random subdomain
-	if inbound.DomainID != "" {
+	// Get domain_id from form (handle empty string)
+	domainID := c.PostForm("domain_id")
+	if domainID != "" {
+		inbound.DomainID = domainID
+		logger.Info("CreateInbound: DomainID from form: %s", domainID)
+
 		var domain models.Domain
-		if err := h.db.First(&domain, "id = ?", inbound.DomainID).Error; err == nil {
+		if err := h.db.First(&domain, "id = ?", domainID).Error; err == nil {
+			logger.Info("CreateInbound: Found domain: %s (ID: %s)", domain.Domain, domain.ID)
+
 			// Check if domain is a wildcard (starts with *.)
 			if strings.HasPrefix(domain.Domain, "*.") {
 				baseDomain := strings.TrimPrefix(domain.Domain, "*.")
 				subdomain := generateRandomSubdomain()
 				inbound.ActualDomain = subdomain + "." + baseDomain
-				logger.Info("Generated subdomain for wildcard cert: %s", inbound.ActualDomain)
+				logger.Info("CreateInbound: Generated subdomain for wildcard cert: %s (base: %s, wildcard: %s)",
+					inbound.ActualDomain, baseDomain, domain.Domain)
+			} else {
+				logger.Info("CreateInbound: Domain is not wildcard: %s", domain.Domain)
 			}
+		} else {
+			logger.Warn("CreateInbound: Failed to find domain with ID %s: %v", domainID, err)
 		}
+	} else {
+		logger.Info("CreateInbound: No DomainID provided")
 	}
 
 	if err := h.db.Create(&inbound).Error; err != nil {
@@ -453,7 +479,19 @@ func (h *Handler) CreateInbound(c *gin.Context) {
 		return
 	}
 
-	logger.Info("Inbound created: %s (Protocol: %s, Port: %d)", inbound.Tag, inbound.Protocol, inbound.Port)
+	logger.Info("Inbound created: %s (Protocol: %s, Port: %d, DomainID: %s, ActualDomain: %s)",
+		inbound.Tag, inbound.Protocol, inbound.Port, inbound.DomainID, inbound.ActualDomain)
+
+	// Generate Nginx config if domain is set
+	if inbound.DomainID != "" && h.nginx != nil {
+		if err := h.generateNginxConfigForInbound(&inbound); err != nil {
+			logger.Error("Failed to generate Nginx config for inbound %s: %v", inbound.Tag, err)
+			// Don't fail the request, just log the error
+		} else {
+			logger.Info("Nginx config generated for inbound %s", inbound.Tag)
+		}
+	}
+
 	h.InboundsTable(c)
 }
 
@@ -465,9 +503,80 @@ func (h *Handler) UpdateInbound(c *gin.Context) {
 		return
 	}
 
+	// Get existing inbound
+	var existingInbound models.Inbound
+	if err := h.db.First(&existingInbound, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Inbound not found")
+		return
+	}
+
+	// Get domain_id from form (handle empty string)
+	domainID := c.PostForm("domain_id")
+	if domainID != "" {
+		inbound.DomainID = domainID
+	} else {
+		inbound.DomainID = ""
+	}
+
+	// Check if domain changed and handle wildcard certificate
+	if inbound.DomainID != "" && inbound.DomainID != existingInbound.DomainID {
+		logger.Info("UpdateInbound: Domain changed for inbound %s (old: %s, new: %s)", id, existingInbound.DomainID, inbound.DomainID)
+
+		var domain models.Domain
+		if err := h.db.First(&domain, "id = ?", inbound.DomainID).Error; err == nil {
+			logger.Info("UpdateInbound: Found new domain: %s (ID: %s)", domain.Domain, domain.ID)
+
+			// Check if domain is a wildcard (starts with *.)
+			if strings.HasPrefix(domain.Domain, "*.") {
+				baseDomain := strings.TrimPrefix(domain.Domain, "*.")
+				subdomain := generateRandomSubdomain()
+				inbound.ActualDomain = subdomain + "." + baseDomain
+				logger.Info("UpdateInbound: Generated new subdomain for wildcard cert: %s (base: %s, wildcard: %s)",
+					inbound.ActualDomain, baseDomain, domain.Domain)
+			} else {
+				// Not a wildcard, clear ActualDomain
+				inbound.ActualDomain = ""
+				logger.Info("UpdateInbound: New domain is not wildcard, cleared ActualDomain")
+			}
+		} else {
+			logger.Warn("UpdateInbound: Failed to find domain with ID %s: %v", inbound.DomainID, err)
+		}
+	} else if inbound.DomainID == "" {
+		// Domain removed, clear ActualDomain
+		inbound.ActualDomain = ""
+		logger.Info("UpdateInbound: Domain removed from inbound %s, cleared ActualDomain", id)
+	} else {
+		// Domain unchanged, preserve existing ActualDomain
+		inbound.ActualDomain = existingInbound.ActualDomain
+		logger.Info("UpdateInbound: Domain unchanged for inbound %s, preserving ActualDomain: %s", id, inbound.ActualDomain)
+	}
+
 	if err := h.db.Model(&models.Inbound{}).Where("id = ?", id).Updates(&inbound).Error; err != nil {
 		c.String(http.StatusInternalServerError, "Error updating inbound")
 		return
+	}
+
+	logger.Info("UpdateInbound: Inbound updated: %s (DomainID: %s, ActualDomain: %s)", id, inbound.DomainID, inbound.ActualDomain)
+
+	// Regenerate Nginx config if domain is set
+	if h.nginx != nil {
+		// First cleanup old configs
+		if err := h.nginx.CleanupInboundConfigs(id); err != nil {
+			logger.Warn("Failed to cleanup old Nginx configs for inbound %s: %v", id, err)
+		}
+
+		// Then generate new config if domain is set
+		if inbound.DomainID != "" {
+			// Reload inbound with domain preloaded
+			var updatedInbound models.Inbound
+			if err := h.db.Preload("Domain").First(&updatedInbound, "id = ?", id).Error; err == nil {
+				if err := h.generateNginxConfigForInbound(&updatedInbound); err != nil {
+					logger.Error("Failed to generate Nginx config for inbound %s: %v", updatedInbound.Tag, err)
+				} else {
+					logger.Info("Nginx config regenerated for inbound %s", updatedInbound.Tag)
+				}
+			}
+		}
 	}
 
 	h.InboundsTable(c)
@@ -475,13 +584,22 @@ func (h *Handler) UpdateInbound(c *gin.Context) {
 
 func (h *Handler) DeleteInbound(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	// Get inbound info before deletion for logging
 	var inbound models.Inbound
 	if err := h.db.First(&inbound, "id = ?", id).Error; err == nil {
 		logger.Info("Inbound deleted: %s", inbound.Tag)
 	}
-	
+
+	// Cleanup Nginx configs before deleting inbound
+	if h.nginx != nil {
+		if err := h.nginx.CleanupInboundConfigs(id); err != nil {
+			logger.Warn("Failed to cleanup Nginx configs for inbound %s: %v", id, err)
+		} else {
+			logger.Info("Nginx configs cleaned up for inbound %s", id)
+		}
+	}
+
 	if err := h.db.Delete(&models.Inbound{}, "id = ?", id).Error; err != nil {
 		logger.Error("Failed to delete inbound %s: %v", id, err)
 		c.String(http.StatusInternalServerError, "Error deleting inbound")
@@ -683,7 +801,7 @@ func (h *Handler) CreateOutbound(c *gin.Context) {
 		c.String(http.StatusBadRequest, "Tag is required")
 		return
 	}
-	
+
 	// Set timestamps
 	outbound.CreatedAt = time.Now()
 	outbound.UpdatedAt = time.Now()
@@ -817,4 +935,40 @@ func (h *Handler) DeleteRouting(c *gin.Context) {
 	}
 
 	c.String(http.StatusOK, "")
+}
+
+// ============ Nginx Config Helper ============
+
+// generateNginxConfigForInbound generates Nginx reverse proxy config for a single inbound
+func (h *Handler) generateNginxConfigForInbound(inbound *models.Inbound) error {
+	if h.nginx == nil {
+		return fmt.Errorf("nginx generator not configured")
+	}
+
+	if inbound.Domain == nil {
+		// Try to load domain if not preloaded
+		if inbound.DomainID != "" {
+			var domain models.Domain
+			if err := h.db.First(&domain, "id = ?", inbound.DomainID).Error; err != nil {
+				return fmt.Errorf("failed to load domain: %v", err)
+			}
+			inbound.Domain = &domain
+		} else {
+			return fmt.Errorf("inbound has no domain configured")
+		}
+	}
+
+	// Generate config for this single inbound
+	inbounds := []models.Inbound{*inbound}
+	if err := h.nginx.GenerateHTTPConfig(inbounds); err != nil {
+		return fmt.Errorf("failed to generate HTTP config: %v", err)
+	}
+
+	// Reload Nginx
+	if err := h.nginx.Reload(); err != nil {
+		logger.Warn("Failed to reload Nginx: %v", err)
+		// Don't return error, config was generated successfully
+	}
+
+	return nil
 }
