@@ -8,8 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gorm.io/gorm"
 	"xray-panel/internal/models"
+
+	"gorm.io/gorm"
 )
 
 const (
@@ -62,7 +63,7 @@ func (g *ConfigGenerator) recordConfig(inboundID, domain, configPath, configType
 	// Check if config already exists
 	var existing models.NginxConfig
 	result := g.db.Where("inbound_id = ? AND config_path = ?", inboundID, configPath).First(&existing)
-	
+
 	if result.Error == nil {
 		// Update existing record
 		existing.Domain = domain
@@ -228,7 +229,7 @@ func (g *ConfigGenerator) GenerateHTTPConfig(inbounds []models.Inbound) error {
 	for domain, inbounds := range domainInbounds {
 		conf := g.buildServerBlock(domain, inbounds)
 		filename := filepath.Join(g.configDir, fmt.Sprintf("%s.conf", domain))
-		
+
 		if err := g.writeConfig(filename, conf); err != nil {
 			return err
 		}
@@ -247,7 +248,7 @@ func (g *ConfigGenerator) GenerateHTTPConfig(inbounds []models.Inbound) error {
 
 func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbound) string {
 	var sb strings.Builder
-	
+
 	// HTTP to HTTPS redirect
 	sb.WriteString("server {\n")
 	sb.WriteString("    listen 80;\n")
@@ -299,14 +300,14 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 			}
 			sb.WriteString("\n")
 			sb.WriteString(fmt.Sprintf("    location %s {\n", i.Path))
-			sb.WriteString("        proxy_redirect off;\n")
-			sb.WriteString(fmt.Sprintf("        proxy_pass http://127.0.0.1:%d;\n", i.Port))
-			sb.WriteString("        proxy_http_version 1.1;\n")
-			sb.WriteString("        proxy_set_header Upgrade $http_upgrade;\n")
-			sb.WriteString("        proxy_set_header Connection \"upgrade\";\n")
-			sb.WriteString("        proxy_set_header Host $host;\n")
-			sb.WriteString("        proxy_set_header X-Real-IP $remote_addr;\n")
-			sb.WriteString("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
+			sb.WriteString(fmt.Sprintf("        grpc_pass grpc://127.0.0.1:%d;\n", i.Port))
+			sb.WriteString("        grpc_set_header Host $host;\n")
+			sb.WriteString("        grpc_set_header X-Real-IP $remote_addr;\n")
+			sb.WriteString("        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
+			sb.WriteString("        client_body_buffer_size 1m;\n")
+			sb.WriteString("        client_max_body_size 0;\n")
+			sb.WriteString("        grpc_read_timeout 1h;\n")
+			sb.WriteString("        grpc_send_timeout 1h;\n")
 			sb.WriteString("    }\n\n")
 		} else if i.Transport == models.TransportWS {
 			sb.WriteString(fmt.Sprintf("    # WebSocket: %s", i.Tag))
