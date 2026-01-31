@@ -163,6 +163,7 @@ func (s *Server) setupRoutes() {
 		api.POST("/routing/:id", s.webHandler.UpdateRouting)
 		api.DELETE("/routing/:id", s.webHandler.DeleteRouting)
 		api.POST("/routing/preset/:preset", s.handleImportPresetRules)
+		api.GET("/routing/geodata", s.handleGetGeoData)
 
 		// Domains
 		api.GET("/domains/table", s.webHandler.DomainsTable)
