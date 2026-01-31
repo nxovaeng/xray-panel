@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>系统设置 - Xray 面板</title>
+    <title>应用配置 - Xray 面板</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="/static/js/htmx.min.js"></script>
@@ -18,7 +18,7 @@
     <main class="content">
         <div class="content-page">
             <div class="page-header">
-                <h1>⚙️ 系统设置</h1>
+                <h1>🔄 应用配置</h1>
             </div>
 
             <div class="stats-grid">
@@ -100,20 +100,26 @@
     <script>
         lucide.createIcons();
 
-        // Check status on load
-        fetch('/api/v1/xray/status', {
-            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
-        })
+        // Check status on load (public API, no auth required)
+        fetch('/api/xray/status')
             .then(res => res.json())
             .then(data => {
                 const el = document.getElementById('xray-status-text');
-                if (data.data.active) {
+                if (data.success && data.data.active) {
                     el.innerText = "运行中";
                     el.style.color = "var(--success)";
-                } else {
+                } else if (data.success) {
                     el.innerText = "已停止";
                     el.style.color = "var(--danger)";
+                } else {
+                    el.innerText = "检测失败";
+                    el.style.color = "var(--warning)";
                 }
+            })
+            .catch(err => {
+                const el = document.getElementById('xray-status-text');
+                el.innerText = "检测失败";
+                el.style.color = "var(--warning)";
             });
 
         function restartXray() {
@@ -123,9 +129,9 @@
             btn.disabled = true;
             lucide.createIcons();
 
-            fetch('/api/v1/xray/restart', {
+            fetch('/api/xray/restart', {
                 method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                credentials: 'same-origin'
             })
                 .then(res => res.json())
                 .then(data => {
@@ -150,9 +156,9 @@
             btn.disabled = true;
             lucide.createIcons();
 
-            fetch('/api/v1/xray/apply', {
+            fetch('/api/xray/apply', {
                 method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                credentials: 'same-origin'
             })
                 .then(res => res.json())
                 .then(data => {
@@ -174,8 +180,8 @@
             const pre = document.getElementById('config-preview');
             pre.innerText = "加载中...";
 
-            fetch('/api/v1/xray/config', {
-                credentials: 'same-origin'  // 自动发送 cookie
+            fetch('/api/xray/config', {
+                credentials: 'same-origin'
             })
                 .then(res => res.text())
                 .then(text => {

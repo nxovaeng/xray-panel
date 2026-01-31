@@ -121,7 +121,17 @@ func (s *Server) setupRoutes() {
 		forms.GET("/domains/:id/edit", s.webHandler.EditDomainForm)
 	}
 
-	// API routes (return HTML fragments or JSON)
+	// API routes - public (no auth required)
+	apiPublic := s.router.Group("/api")
+	{
+		// Health check
+		apiPublic.GET("/health", s.handleHealth)
+
+		// Xray status (public for dashboard display)
+		apiPublic.GET("/xray/status", s.handleXrayStatus)
+	}
+
+	// API routes - protected (require session auth)
 	api := s.router.Group("/api")
 	api.Use(s.webAuthMiddleware())
 	{
@@ -160,6 +170,15 @@ func (s *Server) setupRoutes() {
 		api.POST("/domains", s.webHandler.CreateDomain)
 		api.POST("/domains/:id", s.webHandler.UpdateDomain)
 		api.DELETE("/domains/:id", s.webHandler.DeleteDomain)
+
+		// Xray control (protected)
+		api.POST("/xray/restart", s.handleXrayRestart)
+		api.GET("/xray/config", s.handleGetXrayConfig)
+		api.POST("/xray/apply", s.handleApplyXrayConfig)
+
+		// Settings
+		api.GET("/settings", s.handleGetSettings)
+		api.PUT("/settings", s.handleUpdateSettings)
 	}
 
 	// Legacy API v1 routes (keep for backward compatibility)

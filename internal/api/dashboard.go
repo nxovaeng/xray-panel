@@ -184,33 +184,24 @@ func (s *Server) handleApplyXrayConfig(c *gin.Context) {
 }
 
 // applyXrayConfigHot applies configuration changes via Xray API (hot reload)
+// NOTE: Xray uses gRPC API, not HTTP. Full implementation requires:
+// 1. Add google.golang.org/grpc dependency
+// 2. Import Xray protobuf definitions from github.com/xtls/xray-core
+// 3. Implement gRPC client calls for HandlerService
+//
+// For now, this function returns an error suggesting to use the restart method.
 func (s *Server) applyXrayConfigHot() error {
-	// Create API client
-	apiClient := xray.NewAPIClient("127.0.0.1", s.config.Xray.APIPort)
+	// Hot reload via gRPC API is not implemented yet.
+	// The Xray API uses gRPC protocol (not HTTP REST), which requires:
+	// - gRPC client library
+	// - Xray protobuf definitions
+	// - Connection to Xray's dokodemo-door API inbound
+	//
+	// Current workaround: Use the restart method which writes config to file
+	// and restarts the Xray service via systemctl.
 
-	// Check if Xray API is healthy
-	if !apiClient.IsHealthy() {
-		return fmt.Errorf("Xray API is not responding, please use restart method")
-	}
-
-	// Get current configuration from database
-	var users []models.User
-	var inbounds []models.Inbound
-
-	s.db.Where("enabled = ?", true).Find(&users)
-	s.db.Preload("Domain").Where("enabled = ?", true).Find(&inbounds)
-
-	// TODO: Implement incremental updates
-	// For now, we'll return an error suggesting to use restart method
-	// Full hot reload implementation requires:
-	// 1. Track what changed (diff old vs new config)
-	// 2. Add new users/inbounds via API
-	// 3. Remove deleted users/inbounds via API
-	// 4. Update modified users/inbounds (remove + add)
-
-	return fmt.Errorf("hot reload not fully implemented yet, please use restart method")
+	return fmt.Errorf("热更新功能暂未实现，请使用重启方式应用配置")
 }
-
 
 // generateXrayConfig creates the Xray configuration
 func (s *Server) generateXrayConfig() ([]byte, error) {
