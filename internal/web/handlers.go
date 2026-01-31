@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -803,6 +804,34 @@ func (h *Handler) CreateOutbound(c *gin.Context) {
 		return
 	}
 
+	// Handle WireGuard-specific fields (wg_server -> Server, wg_port -> Port)
+	if outbound.Type == models.OutboundWireGuard {
+		wgServer := c.PostForm("wg_server")
+		wgPortStr := c.PostForm("wg_port")
+		if wgServer != "" {
+			outbound.Server = wgServer
+		}
+		if wgPortStr != "" {
+			if port, err := strconv.Atoi(wgPortStr); err == nil && port > 0 {
+				outbound.Port = port
+			}
+		}
+	}
+
+	// Handle Trojan-specific fields (trojan_server -> Server, trojan_port -> Port)
+	if outbound.Type == models.OutboundTrojan {
+		trojanServer := c.PostForm("trojan_server")
+		trojanPortStr := c.PostForm("trojan_port")
+		if trojanServer != "" {
+			outbound.Server = trojanServer
+		}
+		if trojanPortStr != "" {
+			if port, err := strconv.Atoi(trojanPortStr); err == nil && port > 0 {
+				outbound.Port = port
+			}
+		}
+	}
+
 	// Set defaults
 	if outbound.Tag == "" {
 		c.String(http.StatusBadRequest, "Tag is required")
@@ -830,6 +859,34 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 	if err := c.ShouldBind(&outbound); err != nil {
 		c.String(http.StatusBadRequest, "Invalid input: "+err.Error())
 		return
+	}
+
+	// Handle WireGuard-specific fields (wg_server -> Server, wg_port -> Port)
+	if outbound.Type == models.OutboundWireGuard {
+		wgServer := c.PostForm("wg_server")
+		wgPortStr := c.PostForm("wg_port")
+		if wgServer != "" {
+			outbound.Server = wgServer
+		}
+		if wgPortStr != "" {
+			if port, err := strconv.Atoi(wgPortStr); err == nil && port > 0 {
+				outbound.Port = port
+			}
+		}
+	}
+
+	// Handle Trojan-specific fields (trojan_server -> Server, trojan_port -> Port)
+	if outbound.Type == models.OutboundTrojan {
+		trojanServer := c.PostForm("trojan_server")
+		trojanPortStr := c.PostForm("trojan_port")
+		if trojanServer != "" {
+			outbound.Server = trojanServer
+		}
+		if trojanPortStr != "" {
+			if port, err := strconv.Atoi(trojanPortStr); err == nil && port > 0 {
+				outbound.Port = port
+			}
+		}
 	}
 
 	// Set update timestamp

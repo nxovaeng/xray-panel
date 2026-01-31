@@ -40,7 +40,11 @@
         </div>
         <div class="form-group">
             <label for="password">密码 (可选)</label>
-            <input type="password" id="password" name="password" value="">
+            <input type="password" id="password" name="password" value=""
+                placeholder="{{if and .Outbound .Outbound.Password}}********（已保存）{{end}}">
+            {{if and .Outbound .Outbound.Password}}
+            <small class="form-hint" style="color: var(--success);">✓ 密码已保存（留空保持不变）</small>
+            {{end}}
         </div>
     </div>
 
@@ -70,8 +74,13 @@
         </div>
         <div class="form-group">
             <label for="wg_secret_key">私钥 (Private Key)</label>
-            <input type="text" id="wg_secret_key" name="wg_secret_key" value="">
-            <small class="form-hint">WireGuard 私钥（不会显示已保存的密钥）</small>
+            <input type="password" id="wg_secret_key" name="wg_secret_key" value=""
+                placeholder="{{if and .Outbound .Outbound.WGSecretKey}}********（已保存，留空保持不变）{{else}}输入 WireGuard 私钥{{end}}">
+            {{if and .Outbound .Outbound.WGSecretKey}}
+            <small class="form-hint" style="color: var(--success);">✓ 私钥已保存（留空保持不变，输入新值则更新）</small>
+            {{else}}
+            <small class="form-hint">WireGuard 私钥（必填）</small>
+            {{end}}
         </div>
         <div class="form-group">
             <label for="wg_public_key">服务器公钥 (Peer Public Key)</label>
@@ -119,20 +128,24 @@
     <div id="trojan-fields" class="protocol-fields" style="display: {{if and .Outbound (eq .Outbound.Type "trojan")}}block{{else}}none{{end}};">
         <div class="form-group">
             <label for="trojan_server">服务器地址</label>
-            <input type="text" id="trojan_server" name="server" value="{{if .Outbound}}{{.Outbound.Server}}{{end}}"
+            <input type="text" id="trojan_server" name="trojan_server" value="{{if .Outbound}}{{.Outbound.Server}}{{end}}"
                 placeholder="example.com">
             <small class="form-hint">Trojan 服务器域名或 IP</small>
         </div>
         <div class="form-group">
             <label for="trojan_port">端口</label>
-            <input type="number" id="trojan_port" name="port" value="{{if and .Outbound (gt .Outbound.Port 0)}}{{.Outbound.Port}}{{else}}443{{end}}"
+            <input type="number" id="trojan_port" name="trojan_port" value="{{if and .Outbound (gt .Outbound.Port 0)}}{{.Outbound.Port}}{{else}}443{{end}}"
                 placeholder="443" min="1" max="65535">
         </div>
         <div class="form-group">
             <label for="trojan_password">密码</label>
             <input type="password" id="trojan_password" name="trojan_password" value=""
-                placeholder="your-trojan-password">
-            <small class="form-hint">Trojan 服务器密码（不会显示已保存的密码）</small>
+                placeholder="{{if and .Outbound .Outbound.TrojanPassword}}********（已保存，留空保持不变）{{else}}输入 Trojan 密码{{end}}">
+            {{if and .Outbound .Outbound.TrojanPassword}}
+            <small class="form-hint" style="color: var(--success);">✓ 密码已保存（留空保持不变，输入新值则更新）</small>
+            {{else}}
+            <small class="form-hint">Trojan 服务器密码（必填）</small>
+            {{end}}
         </div>
         <div class="form-group">
             <label for="trojan_sni">SNI (Server Name)</label>
