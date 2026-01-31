@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"xray-panel/internal/geodata"
 	"xray-panel/internal/models"
 )
 
@@ -648,4 +649,11 @@ func (s *Server) handleDeleteDomain(c *gin.Context) {
 	}
 
 	jsonOK(c, gin.H{"deleted": true})
+}
+
+// handleGetGeoData returns available geosite and geoip data
+func (s *Server) handleGetGeoData(c *gin.Context) {
+	parser := geodata.NewGeoDataParser(s.config.Xray.AssetsPath)
+	info := parser.GetGeoDataInfo()
+	jsonOK(c, info)
 }

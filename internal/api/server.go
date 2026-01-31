@@ -221,11 +221,13 @@ func (s *Server) setupRoutes() {
 			{
 				outbounds.GET("", s.handleListOutbounds)
 				outbounds.POST("", s.handleCreateOutbound)
+				// Static routes must come before parameterized routes
+				outbounds.POST("/parse-wireguard", s.handleParseWireGuardConfig)
+				// Parameterized routes
 				outbounds.GET("/:id", s.handleGetOutbound)
 				outbounds.PUT("/:id", s.handleUpdateOutbound)
 				outbounds.DELETE("/:id", s.handleDeleteOutbound)
 				outbounds.POST("/:id/test", s.handleTestOutbound)
-				outbounds.POST("/parse-wireguard", s.handleParseWireGuardConfig)
 			}
 
 			// Routing rules
@@ -235,6 +237,7 @@ func (s *Server) setupRoutes() {
 				routing.POST("", s.handleCreateRoutingRule)
 				routing.PUT("/:id", s.handleUpdateRoutingRule)
 				routing.DELETE("/:id", s.handleDeleteRoutingRule)
+				routing.GET("/geodata", s.handleGetGeoData)
 			}
 
 			// Domains management

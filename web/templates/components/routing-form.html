@@ -73,35 +73,47 @@
     <div id="geosite-fields" class="rule-fields" style="display: {{if and .Rule (eq .Rule.Type "geosite")}}block{{else}}none{{end}};">
         <div class="form-group">
             <label for="geosite_tags">GeoSite 标签</label>
-            <input type="text" id="geosite_tags" name="geosite_tags" 
-                   value="{{if .Rule}}{{.Rule.GeoSiteTags}}{{end}}"
-                   placeholder="category-ads, cn, netflix, google">
+            <div class="input-with-button">
+                <input type="text" id="geosite_tags" name="geosite_tags"
+                       value="{{if .Rule}}{{.Rule.GeoSiteTags}}{{end}}"
+                       placeholder="category-ads, cn, netflix, google"
+                       list="geosite-datalist">
+                <datalist id="geosite-datalist"></datalist>
+                <button type="button" class="btn btn-secondary" onclick="loadGeoSiteTags()">加载标签</button>
+            </div>
             <small class="form-hint">
                 常用标签：<br>
                 • <code>category-ads</code> - 广告域名<br>
                 • <code>cn</code> - 中国大陆网站<br>
                 • <code>geolocation-cn</code> - 中国大陆网站（更全）<br>
                 • <code>netflix, youtube, google</code> - 流媒体/服务<br>
-                多个标签用逗号分隔
+                多个标签用逗号分隔，点击"加载标签"可从 geosite.dat 获取可用标签
             </small>
         </div>
+        <div id="geosite-tags-list" style="display: none; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 10px;"></div>
     </div>
 
     <!-- GeoIP Fields -->
     <div id="geoip-fields" class="rule-fields" style="display: {{if and .Rule (eq .Rule.Type "geoip")}}block{{else}}none{{end}};">
         <div class="form-group">
             <label for="geoip_codes">GeoIP 国家代码</label>
-            <input type="text" id="geoip_codes" name="geoip_codes" 
-                   value="{{if .Rule}}{{.Rule.GeoIPCodes}}{{end}}"
-                   placeholder="cn, us, jp, private">
+            <div class="input-with-button">
+                <input type="text" id="geoip_codes" name="geoip_codes"
+                       value="{{if .Rule}}{{.Rule.GeoIPCodes}}{{end}}"
+                       placeholder="cn, us, jp, private"
+                       list="geoip-datalist">
+                <datalist id="geoip-datalist"></datalist>
+                <button type="button" class="btn btn-secondary" onclick="loadGeoIPCodes()">加载代码</button>
+            </div>
             <small class="form-hint">
                 常用代码：<br>
                 • <code>cn</code> - 中国大陆<br>
                 • <code>us</code> - 美国<br>
                 • <code>private</code> - 私有网络 (192.168.x.x, 10.x.x.x)<br>
-                多个代码用逗号分隔，使用 ISO 3166-1 alpha-2 代码
+                多个代码用逗号分隔，点击"加载代码"可从 geoip.dat 获取可用代码
             </small>
         </div>
+        <div id="geoip-codes-list" style="display: none; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 10px;"></div>
     </div>
 
     <!-- Protocol Fields -->
@@ -227,5 +239,129 @@
             }
         }, 10);
     })();
+    
+    // Cache for geodata
+    let geoDataCache = null;
+    
+    // Load geodata from API
+    function loadGeoData() {
+        if (geoDataCache) {
+            return Promise.resolve(geoDataCache);
+        }
+        
+        return fetch('/api/routing/geodata')
+            .then(response => response.json())
+            .then(result => {
+                if (result.success && result.data) {
+                    geoDataCache = result.data;
+                    return result.data;
+                }
+                throw new Error('Failed to load geodata');
+            });
+    }
+    
+    // Load GeoSite tags
+    function loadGeoSiteTags() {
+        const listDiv = document.getElementById('geosite-tags-list');
+        const datalist = document.getElementById('geosite-datalist');
+        const input = document.getElementById('geosite_tags');
+        
+        listDiv.style.display = 'block';
+        listDiv.innerHTML = '<span style="color: var(--text-secondary);">正在加载...</span>';
+        
+        loadGeoData()
+            .then(data => {
+                if (!data.geosite_available) {
+                    listDiv.innerHTML = '<span style="color: var(--warning);">geosite.dat 文件不存在，请检查 Xray 资源目录配置</span>';
+                    return;
+                }
+                
+                const tags = data.geosite_tags || [];
+                if (tags.length === 0) {
+                    listDiv.innerHTML = '<span style="color: var(--warning);">未找到任何 GeoSite 标签</span>';
+                    return;
+                }
+                
+                // Update datalist for autocomplete
+                datalist.innerHTML = tags.map(tag => `<option value="${tag}">`).join('');
+                
+                // Show clickable tags
+                listDiv.innerHTML = '<div style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.85rem;">点击标签添加到输入框 (共 ' + tags.length + ' 个):</div>' +
+                    '<div style="display: flex; flex-wrap: wrap; gap: 4px;">' +
+                    tags.map(tag => `<span class="badge badge-info" style="cursor: pointer;" onclick="addGeoSiteTag('${tag}')">${tag}</span>`).join('') +
+                    '</div>';
+            })
+            .catch(error => {
+                listDiv.innerHTML = '<span style="color: var(--danger);">加载失败: ' + error.message + '</span>';
+            });
+    }
+    
+    // Add a GeoSite tag to the input
+    function addGeoSiteTag(tag) {
+        const input = document.getElementById('geosite_tags');
+        const currentValue = input.value.trim();
+        
+        if (currentValue === '') {
+            input.value = tag;
+        } else {
+            // Check if tag already exists
+            const tags = currentValue.split(',').map(t => t.trim());
+            if (!tags.includes(tag)) {
+                input.value = currentValue + ', ' + tag;
+            }
+        }
+    }
+    
+    // Load GeoIP codes
+    function loadGeoIPCodes() {
+        const listDiv = document.getElementById('geoip-codes-list');
+        const datalist = document.getElementById('geoip-datalist');
+        const input = document.getElementById('geoip_codes');
+        
+        listDiv.style.display = 'block';
+        listDiv.innerHTML = '<span style="color: var(--text-secondary);">正在加载...</span>';
+        
+        loadGeoData()
+            .then(data => {
+                if (!data.geoip_available) {
+                    listDiv.innerHTML = '<span style="color: var(--warning);">geoip.dat 文件不存在，请检查 Xray 资源目录配置</span>';
+                    return;
+                }
+                
+                const codes = data.geoip_codes || [];
+                if (codes.length === 0) {
+                    listDiv.innerHTML = '<span style="color: var(--warning);">未找到任何 GeoIP 代码</span>';
+                    return;
+                }
+                
+                // Update datalist for autocomplete
+                datalist.innerHTML = codes.map(code => `<option value="${code}">`).join('');
+                
+                // Show clickable codes
+                listDiv.innerHTML = '<div style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.85rem;">点击代码添加到输入框 (共 ' + codes.length + ' 个):</div>' +
+                    '<div style="display: flex; flex-wrap: wrap; gap: 4px;">' +
+                    codes.map(code => `<span class="badge badge-success" style="cursor: pointer;" onclick="addGeoIPCode('${code}')">${code}</span>`).join('') +
+                    '</div>';
+            })
+            .catch(error => {
+                listDiv.innerHTML = '<span style="color: var(--danger);">加载失败: ' + error.message + '</span>';
+            });
+    }
+    
+    // Add a GeoIP code to the input
+    function addGeoIPCode(code) {
+        const input = document.getElementById('geoip_codes');
+        const currentValue = input.value.trim();
+        
+        if (currentValue === '') {
+            input.value = code;
+        } else {
+            // Check if code already exists
+            const codes = currentValue.split(',').map(c => c.trim());
+            if (!codes.includes(code)) {
+                input.value = currentValue + ', ' + code;
+            }
+        }
+    }
 </script>
 {{end}}
