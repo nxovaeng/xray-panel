@@ -55,6 +55,11 @@ type Inbound struct {
 	// Wildcard certificate support
 	ActualDomain string `json:"actual_domain" form:"actual_domain"` // Generated subdomain for wildcard certs (e.g., abc123.example.com)
 
+	// 连接目标域名（可选，用于 CDN 场景）
+	// 如果设置，客户端将连接到此域名，但 SNI 使用 ActualDomain
+	// 例如：SNI=abc.example.com, 连接目标=cdn.example.com 或 example.com
+	ConnectDomain string `json:"connect_domain" form:"connect_domain"`
+
 	Enabled   bool      `json:"enabled" form:"enabled" gorm:"default:true"`
 	Remark    string    `json:"remark" form:"remark"`
 	CreatedAt time.Time `json:"created_at" form:"created_at"`

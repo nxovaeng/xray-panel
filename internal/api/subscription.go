@@ -140,12 +140,19 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 		return ""
 	}
 
-	// 使用 ActualDomain（如果存在），否则使用 Domain.Domain
+	// SNI 域名：使用 ActualDomain（如果存在），否则使用 Domain.Domain
 	// ActualDomain 是为通配符证书生成的实际子域名（如 abc123.example.com）
 	// Domain.Domain 可能是通配符（如 *.example.com）或普通域名
-	domain := inbound.Domain.Domain
+	sniDomain := inbound.Domain.Domain
 	if inbound.ActualDomain != "" {
-		domain = inbound.ActualDomain
+		sniDomain = inbound.ActualDomain
+	}
+
+	// 连接目标域名：如果设置了 ConnectDomain 则使用它，否则使用 sniDomain
+	// ConnectDomain 用于 CDN 场景，客户端连接到 CDN 域名，但 SNI 使用反代子域名
+	connectDomain := sniDomain
+	if inbound.ConnectDomain != "" {
+		connectDomain = inbound.ConnectDomain
 	}
 
 	// 端口始终为 443（Nginx 反向代理）
@@ -160,7 +167,7 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 	// Security 始终为 TLS（客户端到 Nginx）
 	// Nginx 到 Xray 的连接是 none（内部通信）
 	params.Set("security", "tls")
-	params.Set("sni", domain)
+	params.Set("sni", sniDomain) // SNI 使用反代子域名
 	params.Set("alpn", "h2,http/1.1")
 	params.Set("fp", "chrome")
 
@@ -189,13 +196,15 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 	// Build remark (node name)
 	remark := inbound.Remark
 	if remark == "" {
-		remark = fmt.Sprintf("%s-%s-%s", domain, inbound.Protocol, inbound.Transport)
+		remark = fmt.Sprintf("%s-%s-%s", sniDomain, inbound.Protocol, inbound.Transport)
 	}
 
 	// Build VLESS URL
+	// 连接目标使用 connectDomain（可能是 CDN 域名或父域名）
+	// SNI 使用 sniDomain（反代子域名）
 	link := fmt.Sprintf("vless://%s@%s:%d?%s#%s",
 		user.UUID,
-		domain,
+		connectDomain, // 连接目标域名
 		port,
 		params.Encode(),
 		url.PathEscape(remark),
@@ -219,20 +228,26 @@ func generateClashConfig(user models.User, inbounds []models.Inbound) string {
 			continue
 		}
 
-		// 使用 ActualDomain（如果存在），否则使用 Domain.Domain
-		domain := inbound.Domain.Domain
+		// SNI 域名：使用 ActualDomain（如果存在），否则使用 Domain.Domain
+		sniDomain := inbound.Domain.Domain
 		if inbound.ActualDomain != "" {
-			domain = inbound.ActualDomain
+			sniDomain = inbound.ActualDomain
+		}
+
+		// 连接目标域名：如果设置了 ConnectDomain 则使用它，否则使用 sniDomain
+		connectDomain := sniDomain
+		if inbound.ConnectDomain != "" {
+			connectDomain = inbound.ConnectDomain
 		}
 
 		name := inbound.Remark
 		if name == "" {
-			name = fmt.Sprintf("%s-%s", domain, inbound.Transport)
+			name = fmt.Sprintf("%s-%s", sniDomain, inbound.Transport)
 		}
 
 		sb.WriteString(fmt.Sprintf("  - name: \"%s\"\n", name))
 		sb.WriteString("    type: vless\n")
-		sb.WriteString(fmt.Sprintf("    server: %s\n", domain))
+		sb.WriteString(fmt.Sprintf("    server: %s\n", connectDomain)) // 连接目标域名
 
 		// Use port 443 for Nginx reverse proxy connections
 		port := 443
@@ -246,7 +261,7 @@ func generateClashConfig(user models.User, inbounds []models.Inbound) string {
 
 		// TLS 始终启用（客户端到 Nginx）
 		sb.WriteString("    tls: true\n")
-		sb.WriteString(fmt.Sprintf("    servername: %s\n", domain))
+		sb.WriteString(fmt.Sprintf("    servername: %s\n", sniDomain)) // SNI 使用反代子域名
 
 		// Transport options
 		switch inbound.Transport {

@@ -1,5 +1,5 @@
 {{define "components/inbound-form.html"}}
-<form hx-post="/api/inbounds{{if .Inbound}}/{{.Inbound.ID}}{{end}}" hx-target="#inbounds-table" hx-swap="innerHTML">
+<form hx-post="/api/inbounds{{if .Inbound}}/{{.Inbound.ID}}{{end}}" hx-target="#inbounds-table" hx-swap="innerHTML" id="inbound-form">
 
     <div class="form-group">
         <label for="tag">标签</label>
@@ -17,9 +17,13 @@
 
     <div class="form-group">
         <label for="port">端口</label>
-        <input type="number" id="port" name="port" value="{{if .Inbound}}{{.Inbound.Port}}{{else}}10001{{end}}"
-            min="1024" max="65535" required>
-        <small class="form-hint">Xray 监听端口（Nginx 反向代理到此端口）</small>
+        <div class="input-with-button">
+            <input type="number" id="port" name="port" value="{{if .Inbound}}{{.Inbound.Port}}{{end}}"
+                min="1024" max="65535" placeholder="留空自动生成">
+            <button type="button" class="btn btn-sm" onclick="generateRandomPort()">🎲 随机</button>
+        </div>
+        <input type="hidden" id="random_port" name="random_port" value="false">
+        <small class="form-hint">Xray 监听端口（留空或点击随机自动生成 10000-60000 之间的端口）</small>
     </div>
 
     <div class="form-group">
@@ -27,7 +31,7 @@
         <select id="transport" name="transport" required onchange="toggleTransportFields(this.value)">
             <option value="xhttp" {{if and .Inbound (eq .Inbound.Transport "xhttp")}}selected{{end}}>XHTTP (推荐)</option>
             <option value="grpc" {{if and .Inbound (eq .Inbound.Transport "grpc")}}selected{{end}}>gRPC</option>
-            <option value="ws" {{if and .Inbound (eq .Inbound.Transport "ws")}}selected{{end}}>WebSocket</option>       
+            <option value="ws" {{if and .Inbound (eq .Inbound.Transport "ws")}}selected{{end}}>WebSocket</option>
         </select>
         <small class="form-hint">传输层协议（均可被 Nginx 反代）</small>
     </div>
@@ -36,9 +40,13 @@
     <div id="ws-xhttp-fields" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "ws") (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
         <div class="form-group">
             <label for="path">路径</label>
-            <input type="text" id="path" name="path" value="{{if .Inbound}}{{.Inbound.Path}}{{else}}/{{end}}"
-                placeholder="/ws 或 /xhttp">
-            <small class="form-hint">WebSocket/XHTTP 路径</small>
+            <div class="input-with-button">
+                <input type="text" id="path" name="path" value="{{if .Inbound}}{{.Inbound.Path}}{{end}}"
+                    placeholder="留空自动生成随机路径">
+                <button type="button" class="btn btn-sm" onclick="generateRandomPath()">🎲 随机</button>
+            </div>
+            <input type="hidden" id="random_path" name="random_path" value="false">
+            <small class="form-hint">WebSocket/XHTTP 路径（留空或点击随机自动生成）</small>
         </div>
         <div class="form-group">
             <label for="host">Host (可选)</label>
@@ -59,7 +67,7 @@
     </div>
 
     <div class="form-group">
-        <label for="domain_id">域名</label>
+        <label for="domain_id">SNI 域名</label>
         <select id="domain_id" name="domain_id">
             <option value="">无</option>
             {{range .Domains}}
@@ -68,7 +76,15 @@
             </option>
             {{end}}
         </select>
-        <small class="form-hint">关联域名（Nginx 使用此域名的证书）</small>
+        <small class="form-hint">关联域名（用于 SNI 和 Nginx 证书）</small>
+    </div>
+
+    <div class="form-group">
+        <label for="connect_domain">连接目标域名 (可选)</label>
+        <input type="text" id="connect_domain" name="connect_domain"
+            value="{{if .Inbound}}{{.Inbound.ConnectDomain}}{{end}}"
+            placeholder="cdn.example.com 或 example.com">
+        <small class="form-hint">客户端实际连接的域名（CDN域名或父域名），留空则使用 SNI 域名</small>
     </div>
 
     <div class="form-group">
@@ -97,5 +113,37 @@
             grpcFields.style.display = 'none';
         }
     }
+
+    function generateRandomPort() {
+        // 生成 10000-60000 之间的随机端口
+        const port = Math.floor(Math.random() * 50000) + 10000;
+        document.getElementById('port').value = port;
+        document.getElementById('random_port').value = 'false'; // 已经在前端生成了
+    }
+
+    function generateRandomPath() {
+        // 生成 16 位随机十六进制字符串作为路径
+        const bytes = new Uint8Array(8);
+        crypto.getRandomValues(bytes);
+        const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        document.getElementById('path').value = '/' + hex;
+        document.getElementById('random_path').value = 'false'; // 已经在前端生成了
+    }
 </script>
+
+<style>
+    .input-with-button {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .input-with-button input {
+        flex: 1;
+    }
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+</style>
 {{end}}
