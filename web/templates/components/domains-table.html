@@ -3,6 +3,7 @@
     <thead>
         <tr>
             <th>域名</th>
+            <th>类型</th>
             <th>证书路径</th>
             <th>密钥路径</th>
             <th>操作</th>
@@ -16,6 +17,18 @@
                     <i data-lucide="globe" style="width: 16px; color: var(--text-secondary);"></i>
                     <strong>{{.Domain}}</strong>
                 </div>
+            </td>
+            <td>
+                {{if .IsWildcard}}
+                <span class="badge badge-info" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa;">
+                    <i data-lucide="asterisk" style="width: 12px; height: 12px;"></i>
+                    通配符
+                </span>
+                {{else}}
+                <span class="badge" style="background: rgba(34, 197, 94, 0.2); color: #4ade80;">
+                    普通
+                </span>
+                {{end}}
             </td>
             <td>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
@@ -43,7 +56,7 @@
         </tr>
         {{else}}
         <tr>
-            <td colspan="4" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
+            <td colspan="5" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
                 <i data-lucide="globe" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
                 <div>暂无域名配置</div>
                 <div style="margin-top: 0.5rem; font-size: 0.875rem;">

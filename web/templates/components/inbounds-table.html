@@ -17,9 +17,24 @@
             <td><span class="badge badge-info">{{.Protocol}}</span></td>
             <td>{{.Port}}</td>
             <td>{{.Transport}}</td>
-            <td>{{if .Domain}}<div style="display:flex;align-items:center;gap:0.3rem;"><i data-lucide="globe"
-                        style="width:14px;"></i> {{.Domain.Domain}}</div>{{else}}<span
-                    style="color:var(--text-secondary);">-</span>{{end}}</td>
+            <td>
+                {{if .Domain}}
+                    <div style="display:flex;flex-direction:column;gap:0.2rem;">
+                        <div style="display:flex;align-items:center;gap:0.3rem;">
+                            <i data-lucide="globe" style="width:14px;"></i> 
+                            {{.Domain.Domain}}
+                        </div>
+                        {{if .ActualDomain}}
+                            <div style="display:flex;align-items:center;gap:0.3rem;margin-left:1.2rem;">
+                                <i data-lucide="arrow-right" style="width:12px;color:var(--text-secondary);"></i>
+                                <code style="font-size:0.85em;color:var(--accent);border-color:rgba(99,102,241,0.2);">{{.ActualDomain}}</code>
+                            </div>
+                        {{end}}
+                    </div>
+                {{else}}
+                    <span style="color:var(--text-secondary);">-</span>
+                {{end}}
+            </td>
             <td>
                 <div style="display: flex; gap: 0.5rem;">
                     <button hx-get="/inbounds/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑入站')"

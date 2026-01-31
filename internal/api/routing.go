@@ -150,15 +150,15 @@ func (s *Server) handleListDomains(c *gin.Context) {
 
 // CertificateInfo represents a discovered certificate with parsed info
 type CertificateInfo struct {
-	Domain       string    `json:"domain"`        // 主域名（从目录名提取）
-	Domains      []string  `json:"domains"`       // 证书包含的所有域名（从证书解析）
+	Domain       string    `json:"domain"`  // 主域名（从目录名提取）
+	Domains      []string  `json:"domains"` // 证书包含的所有域名（从证书解析）
 	CertPath     string    `json:"cert_path"`
 	KeyPath      string    `json:"key_path"`
-	ExpiryDate   time.Time `json:"expiry_date"`   // 过期时间
+	ExpiryDate   time.Time `json:"expiry_date"`    // 过期时间
 	DaysToExpiry int       `json:"days_to_expiry"` // 距离过期天数
-	Status       string    `json:"status"`        // "正常" | "即将过期" | "已过期"
-	Issuer       string    `json:"issuer"`        // 证书颁发者
-	IsWildcard   bool      `json:"is_wildcard"`   // 是否为通配符证书
+	Status       string    `json:"status"`         // "正常" | "即将过期" | "已过期"
+	Issuer       string    `json:"issuer"`         // 证书颁发者
+	IsWildcard   bool      `json:"is_wildcard"`    // 是否为通配符证书
 	Exists       bool      `json:"exists"`
 }
 
@@ -202,13 +202,13 @@ func parseCertificateDetails(certPath string) (issuer string, expiry time.Time, 
 	// Collect all domains from certificate
 	domains = make([]string, 0)
 	domainSet := make(map[string]bool) // 用于去重
-	
+
 	// Add Common Name if it's a domain
 	if cert.Subject.CommonName != "" {
 		domains = append(domains, cert.Subject.CommonName)
 		domainSet[cert.Subject.CommonName] = true
 	}
-	
+
 	// Add all Subject Alternative Names
 	for _, name := range cert.DNSNames {
 		if !domainSet[name] {
@@ -306,7 +306,7 @@ func (s *Server) handleScanCertificates(c *gin.Context) {
 		// acme.sh may append _ecc or _rsa suffix for different key types
 		// e.g., example.com_ecc, example.com_rsa, or just example.com
 		domain := dirName
-		
+
 		// Remove _ecc or _rsa suffix to get actual domain
 		if strings.HasSuffix(domain, "_ecc") {
 			domain = strings.TrimSuffix(domain, "_ecc")
@@ -354,7 +354,7 @@ func (s *Server) handleScanCertificates(c *gin.Context) {
 		// Parse certificate details including wildcard detection
 		issuer, expiry, domains, isWildcard, parseErr := parseCertificateDetails(certPath)
 		status, daysToExpiry := getCertificateStatus(expiry)
-		
+
 		if parseErr != nil {
 			// If parsing fails, still add with basic info
 			issuer = "Unknown"
@@ -489,15 +489,36 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 			continue
 		}
 
+		// Parse certificate to detect wildcard and get actual domain names
+		_, _, certDomains, isWildcard, parseErr := parseCertificateDetails(certPath)
+		if parseErr != nil {
+			importErrors = append(importErrors, fmt.Sprintf("解析证书 %s 失败: %v", domain, parseErr))
+			continue
+		}
+
+		// If certificate contains wildcard domain, use it as the domain name
+		// e.g., if cert has *.example.com, use *.example.com as domain
+		actualDomain := domain
+		for _, d := range certDomains {
+			if strings.HasPrefix(d, "*.") {
+				actualDomain = d
+				break
+			}
+		}
+
 		// Check if domain already exists
 		var existingDomain models.Domain
-		if err := s.db.Where("domain = ?", domain).First(&existingDomain).Error; err == nil {
-			// Domain exists, update cert paths if different
-			if existingDomain.CertPath != certPath || existingDomain.KeyPath != keyPath {
+		if err := s.db.Where("domain = ?", actualDomain).First(&existingDomain).Error; err == nil {
+			// Domain exists, update cert paths and wildcard status if different
+			needsUpdate := existingDomain.CertPath != certPath ||
+				existingDomain.KeyPath != keyPath ||
+				existingDomain.IsWildcard != isWildcard
+			if needsUpdate {
 				existingDomain.CertPath = certPath
 				existingDomain.KeyPath = keyPath
+				existingDomain.IsWildcard = isWildcard
 				if err := s.db.Save(&existingDomain).Error; err != nil {
-					importErrors = append(importErrors, fmt.Sprintf("更新 %s 失败: %v", domain, err))
+					importErrors = append(importErrors, fmt.Sprintf("更新 %s 失败: %v", actualDomain, err))
 				}
 			}
 			skippedCount++
@@ -506,15 +527,16 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 
 		// Create new domain
 		newDomain := models.Domain{
-			Domain:   domain,
-			Type:     models.DomainTypeDirect,
-			CertPath: certPath,
-			KeyPath:  keyPath,
-			Enabled:  true,
+			Domain:     actualDomain,
+			Type:       models.DomainTypeDirect,
+			IsWildcard: isWildcard,
+			CertPath:   certPath,
+			KeyPath:    keyPath,
+			Enabled:    true,
 		}
 
 		if err := s.db.Create(&newDomain).Error; err != nil {
-			importErrors = append(importErrors, fmt.Sprintf("导入 %s 失败: %v", domain, err))
+			importErrors = append(importErrors, fmt.Sprintf("导入 %s 失败: %v", actualDomain, err))
 			continue
 		}
 

@@ -21,13 +21,14 @@ type Domain struct {
 	ID          string     `json:"id" form:"id" gorm:"primaryKey"`
 	Domain      string     `json:"domain" form:"domain" gorm:"uniqueIndex;not null"`
 	Type        DomainType `json:"type" form:"type" gorm:"default:direct"`
-	ServerName  string     `json:"server_name" form:"server_name"` // SNI for Reality
-	Fingerprint string     `json:"fingerprint" form:"fingerprint"` // TLS fingerprint for Reality
-	ShortID     string     `json:"short_id" form:"short_id"`       // Reality short ID
-	PrivateKey  string     `json:"-" form:"private_key"`           // Reality private key
-	PublicKey   string     `json:"public_key" form:"public_key"`   // Reality public key
-	CertPath    string     `json:"cert_path" form:"cert_path"`     // TLS certificate path
-	KeyPath     string     `json:"key_path" form:"key_path"`       // TLS private key path
+	IsWildcard  bool       `json:"is_wildcard" form:"is_wildcard" gorm:"default:false"` // 是否为通配符证书
+	ServerName  string     `json:"server_name" form:"server_name"`                      // SNI for Reality
+	Fingerprint string     `json:"fingerprint" form:"fingerprint"`                      // TLS fingerprint for Reality
+	ShortID     string     `json:"short_id" form:"short_id"`                            // Reality short ID
+	PrivateKey  string     `json:"-" form:"private_key"`                                // Reality private key
+	PublicKey   string     `json:"public_key" form:"public_key"`                        // Reality public key
+	CertPath    string     `json:"cert_path" form:"cert_path"`                          // TLS certificate path
+	KeyPath     string     `json:"key_path" form:"key_path"`                            // TLS private key path
 	Enabled     bool       `json:"enabled" form:"enabled" gorm:"default:true"`
 	CreatedAt   time.Time  `json:"created_at" form:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at" form:"updated_at"`

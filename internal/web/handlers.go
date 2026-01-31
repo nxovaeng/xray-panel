@@ -456,14 +456,19 @@ func (h *Handler) CreateInbound(c *gin.Context) {
 		if err := h.db.First(&domain, "id = ?", domainID).Error; err == nil {
 			logger.Info("CreateInbound: Found domain: %s (ID: %s)", domain.Domain, domain.ID)
 
-			// Check if domain is a wildcard (starts with *.)
-			if strings.HasPrefix(domain.Domain, "*.") {
+			// Check if domain is a wildcard certificate
+			// Use IsWildcard field from database (set during certificate import)
+			// or fallback to checking domain prefix for backward compatibility
+			isWildcard := domain.IsWildcard || strings.HasPrefix(domain.Domain, "*.")
+			if isWildcard {
 				baseDomain := strings.TrimPrefix(domain.Domain, "*.")
 				subdomain := generateRandomSubdomain()
 				inbound.ActualDomain = subdomain + "." + baseDomain
-				logger.Info("CreateInbound: Generated subdomain for wildcard cert: %s (base: %s, wildcard: %s)",
-					inbound.ActualDomain, baseDomain, domain.Domain)
+				logger.Info("CreateInbound: Generated subdomain for wildcard cert: %s (base: %s, wildcard: %s, IsWildcard: %v)",
+					inbound.ActualDomain, baseDomain, domain.Domain, domain.IsWildcard)
 			} else {
+				// For non-wildcard domains, use the domain directly
+				inbound.ActualDomain = domain.Domain
 				logger.Info("CreateInbound: Domain is not wildcard: %s", domain.Domain)
 			}
 		} else {
@@ -526,17 +531,19 @@ func (h *Handler) UpdateInbound(c *gin.Context) {
 		if err := h.db.First(&domain, "id = ?", inbound.DomainID).Error; err == nil {
 			logger.Info("UpdateInbound: Found new domain: %s (ID: %s)", domain.Domain, domain.ID)
 
-			// Check if domain is a wildcard (starts with *.)
-			if strings.HasPrefix(domain.Domain, "*.") {
+			// Check if domain is a wildcard certificate
+			// Use IsWildcard field from database or fallback to checking domain prefix
+			isWildcard := domain.IsWildcard || strings.HasPrefix(domain.Domain, "*.")
+			if isWildcard {
 				baseDomain := strings.TrimPrefix(domain.Domain, "*.")
 				subdomain := generateRandomSubdomain()
 				inbound.ActualDomain = subdomain + "." + baseDomain
-				logger.Info("UpdateInbound: Generated new subdomain for wildcard cert: %s (base: %s, wildcard: %s)",
-					inbound.ActualDomain, baseDomain, domain.Domain)
+				logger.Info("UpdateInbound: Generated new subdomain for wildcard cert: %s (base: %s, wildcard: %s, IsWildcard: %v)",
+					inbound.ActualDomain, baseDomain, domain.Domain, domain.IsWildcard)
 			} else {
-				// Not a wildcard, clear ActualDomain
-				inbound.ActualDomain = ""
-				logger.Info("UpdateInbound: New domain is not wildcard, cleared ActualDomain")
+				// Not a wildcard, use domain directly
+				inbound.ActualDomain = domain.Domain
+				logger.Info("UpdateInbound: New domain is not wildcard, using domain: %s", domain.Domain)
 			}
 		} else {
 			logger.Warn("UpdateInbound: Failed to find domain with ID %s: %v", inbound.DomainID, err)
