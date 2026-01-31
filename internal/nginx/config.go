@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gorm.io/gorm"
 	"xray-panel/internal/models"
 )
 
@@ -18,15 +19,28 @@ const (
 // ConfigGenerator handles generating Nginx configurations
 type ConfigGenerator struct {
 	configDir string
+	streamDir string
 	reloadCmd string
+	db        *gorm.DB
 }
 
 // NewGenerator creates a new Nginx config generator
-func NewGenerator(configDir, reloadCmd string) *ConfigGenerator {
+func NewGenerator(configDir, streamDir string) *ConfigGenerator {
 	return &ConfigGenerator{
 		configDir: configDir,
-		reloadCmd: reloadCmd,
+		streamDir: streamDir,
+		reloadCmd: "systemctl reload nginx",
 	}
+}
+
+// SetDB sets the database connection for tracking configs
+func (g *ConfigGenerator) SetDB(db *gorm.DB) {
+	g.db = db
+}
+
+// SetReloadCmd sets custom reload command
+func (g *ConfigGenerator) SetReloadCmd(cmd string) {
+	g.reloadCmd = cmd
 }
 
 // Reload reloads Nginx configuration
@@ -37,6 +51,76 @@ func (g *ConfigGenerator) Reload() error {
 	}
 	cmd := exec.Command(parts[0], parts[1:]...)
 	return cmd.Run()
+}
+
+// recordConfig records a generated Nginx config in database
+func (g *ConfigGenerator) recordConfig(inboundID, domain, configPath, configType string) error {
+	if g.db == nil {
+		return nil // Skip if no database connection
+	}
+
+	// Check if config already exists
+	var existing models.NginxConfig
+	result := g.db.Where("inbound_id = ? AND config_path = ?", inboundID, configPath).First(&existing)
+	
+	if result.Error == nil {
+		// Update existing record
+		existing.Domain = domain
+		existing.ConfigType = configType
+		return g.db.Save(&existing).Error
+	}
+
+	// Create new record
+	config := &models.NginxConfig{
+		InboundID:  inboundID,
+		Domain:     domain,
+		ConfigPath: configPath,
+		ConfigType: configType,
+		IsManaged:  true,
+	}
+	return g.db.Create(config).Error
+}
+
+// CleanupInboundConfigs removes Nginx configs for a specific inbound
+func (g *ConfigGenerator) CleanupInboundConfigs(inboundID string) error {
+	if g.db == nil {
+		return nil
+	}
+
+	// Find all configs for this inbound
+	var configs []models.NginxConfig
+	if err := g.db.Where("inbound_id = ?", inboundID).Find(&configs).Error; err != nil {
+		return err
+	}
+
+	// Delete config files
+	for _, config := range configs {
+		if config.IsManaged {
+			// Check if file has managed header before deleting
+			if g.isManagedFile(config.ConfigPath) {
+				os.Remove(config.ConfigPath)
+			}
+		}
+	}
+
+	// Delete database records
+	return g.db.Where("inbound_id = ?", inboundID).Delete(&models.NginxConfig{}).Error
+}
+
+// isManagedFile checks if a file is managed by the panel
+func (g *ConfigGenerator) isManagedFile(filename string) bool {
+	file, err := os.Open(filename)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	if scanner.Scan() {
+		firstLine := scanner.Text()
+		return strings.Contains(firstLine, ManagedHeader)
+	}
+	return false
 }
 
 // writeConfig safely writes Nginx configuration
@@ -127,11 +211,16 @@ func (g *ConfigGenerator) GeneratePanelConfig(domain, certPath, keyPath, listenA
 
 // GenerateHTTPConfig generates Nginx HTTP server blocks for inbounds
 func (g *ConfigGenerator) GenerateHTTPConfig(inbounds []models.Inbound) error {
-	// Group inbounds by domain
+	// Group inbounds by actual domain (considering wildcard subdomains)
 	domainInbounds := make(map[string][]models.Inbound)
 	for _, i := range inbounds {
 		if i.Domain != nil {
-			domainInbounds[i.Domain.Domain] = append(domainInbounds[i.Domain.Domain], i)
+			// Use ActualDomain if set (for wildcard certs), otherwise use Domain.Domain
+			domain := i.Domain.Domain
+			if i.ActualDomain != "" {
+				domain = i.ActualDomain
+			}
+			domainInbounds[domain] = append(domainInbounds[domain], i)
 		}
 	}
 
@@ -139,8 +228,17 @@ func (g *ConfigGenerator) GenerateHTTPConfig(inbounds []models.Inbound) error {
 	for domain, inbounds := range domainInbounds {
 		conf := g.buildServerBlock(domain, inbounds)
 		filename := filepath.Join(g.configDir, fmt.Sprintf("%s.conf", domain))
+		
 		if err := g.writeConfig(filename, conf); err != nil {
 			return err
+		}
+
+		// Record each inbound's config
+		for _, inbound := range inbounds {
+			if err := g.recordConfig(inbound.ID, domain, filename, "http"); err != nil {
+				// Log error but don't fail
+				fmt.Printf("Warning: failed to record config for inbound %s: %v\n", inbound.ID, err)
+			}
 		}
 	}
 
@@ -165,6 +263,7 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 	sb.WriteString(fmt.Sprintf("    server_name %s;\n\n", domain))
 
 	// SSL Configuration
+	// Use the first inbound's domain cert (they should all use the same domain)
 	if len(inbounds) > 0 && inbounds[0].Domain != nil {
 		d := inbounds[0].Domain
 		sb.WriteString(fmt.Sprintf("    ssl_certificate %s;\n", d.CertPath))
@@ -178,9 +277,12 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 
 	// Proxy locations for each inbound
 	for _, i := range inbounds {
-		// ... (keep existing location generation logic)
 		if i.IsGRPC() {
-			sb.WriteString(fmt.Sprintf("    # gRPC: %s\n", i.Tag))
+			sb.WriteString(fmt.Sprintf("    # gRPC: %s", i.Tag))
+			if i.ActualDomain != "" {
+				sb.WriteString(fmt.Sprintf(" (subdomain: %s)", i.ActualDomain))
+			}
+			sb.WriteString("\n")
 			sb.WriteString(fmt.Sprintf("    location /%s {\n", i.ServiceName))
 			sb.WriteString("        if ($content_type !~ \"application/grpc\") {\n")
 			sb.WriteString("            return 404;\n")
@@ -191,7 +293,11 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 			sb.WriteString("        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
 			sb.WriteString("    }\n\n")
 		} else if i.IsXHTTP() {
-			sb.WriteString(fmt.Sprintf("    # XHTTP: %s\n", i.Tag))
+			sb.WriteString(fmt.Sprintf("    # XHTTP: %s", i.Tag))
+			if i.ActualDomain != "" {
+				sb.WriteString(fmt.Sprintf(" (subdomain: %s)", i.ActualDomain))
+			}
+			sb.WriteString("\n")
 			sb.WriteString(fmt.Sprintf("    location %s {\n", i.Path))
 			sb.WriteString("        proxy_redirect off;\n")
 			sb.WriteString(fmt.Sprintf("        proxy_pass http://127.0.0.1:%d;\n", i.Port))
@@ -203,7 +309,11 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 			sb.WriteString("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
 			sb.WriteString("    }\n\n")
 		} else if i.Transport == models.TransportWS {
-			sb.WriteString(fmt.Sprintf("    # WebSocket: %s\n", i.Tag))
+			sb.WriteString(fmt.Sprintf("    # WebSocket: %s", i.Tag))
+			if i.ActualDomain != "" {
+				sb.WriteString(fmt.Sprintf(" (subdomain: %s)", i.ActualDomain))
+			}
+			sb.WriteString("\n")
 			sb.WriteString(fmt.Sprintf("    location %s {\n", i.Path))
 			sb.WriteString("        proxy_redirect off;\n")
 			sb.WriteString(fmt.Sprintf("        proxy_pass http://127.0.0.1:%d;\n", i.Port))

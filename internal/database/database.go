@@ -44,6 +44,7 @@ func Migrate(db *gorm.DB) error {
 		&models.Inbound{},
 		&models.Outbound{},
 		&models.RoutingRule{},
+		&models.NginxConfig{},
 		&models.Setting{})
 }
 
