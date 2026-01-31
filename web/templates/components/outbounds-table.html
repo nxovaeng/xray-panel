@@ -34,6 +34,10 @@
             </td>
             <td>
                 <div style="display: flex; gap: 0.5rem;">
+                    <button onclick="testOutboundFromList('{{.ID}}')" class="btn btn-sm btn-outline"
+                        style="color: var(--success); border-color: rgba(34, 197, 94, 0.3);" title="测试连接">
+                        <i data-lucide="wifi" style="width: 16px; height: 16px;"></i>
+                    </button>
                     <button hx-get="/outbounds/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑出站')"
                         class="btn btn-sm btn-outline" title="编辑">
                         <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
@@ -56,5 +60,68 @@
         {{end}}
     </tbody>
 </table>
-<script>lucide.createIcons();</script>
+<script>
+lucide.createIcons();
+
+// Test outbound connection from list
+function testOutboundFromList(outboundId) {
+    const row = document.getElementById('outbound-' + outboundId);
+    const testBtn = row.querySelector('button[onclick*="testOutboundFromList"]');
+    const originalContent = testBtn.innerHTML;
+    
+    // Show loading state
+    testBtn.innerHTML = '<i data-lucide="loader" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i>';
+    testBtn.disabled = true;
+    lucide.createIcons();
+    
+    fetch('/api/outbounds/' + outboundId + '/test', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        testBtn.disabled = false;
+        if (data.success) {
+            testBtn.innerHTML = '<i data-lucide="check" style="width: 16px; height: 16px;"></i>';
+            testBtn.style.color = 'var(--success)';
+            testBtn.style.borderColor = 'rgba(34, 197, 94, 0.5)';
+            let message = '连接成功';
+            if (data.latency_ms) {
+                message += ' (' + data.latency_ms + 'ms)';
+            }
+            showNotification(message, 'success');
+        } else {
+            testBtn.innerHTML = '<i data-lucide="x" style="width: 16px; height: 16px;"></i>';
+            testBtn.style.color = 'var(--danger)';
+            testBtn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+            showNotification('连接失败: ' + data.message, 'error');
+        }
+        lucide.createIcons();
+        
+        // Reset button after 3 seconds
+        setTimeout(() => {
+            testBtn.innerHTML = originalContent;
+            testBtn.style.color = 'var(--success)';
+            testBtn.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+            lucide.createIcons();
+        }, 3000);
+    })
+    .catch(error => {
+        testBtn.disabled = false;
+        testBtn.innerHTML = '<i data-lucide="x" style="width: 16px; height: 16px;"></i>';
+        testBtn.style.color = 'var(--danger)';
+        lucide.createIcons();
+        showNotification('测试失败: ' + error.message, 'error');
+        
+        setTimeout(() => {
+            testBtn.innerHTML = originalContent;
+            testBtn.style.color = 'var(--success)';
+            testBtn.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+            lucide.createIcons();
+        }, 3000);
+    });
+}
+</script>
 {{end}}

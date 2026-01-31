@@ -31,7 +31,7 @@
         </div>
         <div class="form-group">
             <label for="port">端口</label>
-            <input type="number" id="port" name="port" value="{{if .Outbound}}{{.Outbound.Port}}{{end}}"
+            <input type="number" id="port" name="port" value="{{if and .Outbound (gt .Outbound.Port 0)}}{{.Outbound.Port}}{{end}}"
                 placeholder="1080" min="1" max="65535">
         </div>
         <div class="form-group">
@@ -125,7 +125,7 @@
         </div>
         <div class="form-group">
             <label for="trojan_port">端口</label>
-            <input type="number" id="trojan_port" name="port" value="{{if .Outbound}}{{.Outbound.Port}}{{else}}443{{end}}"
+            <input type="number" id="trojan_port" name="port" value="{{if and .Outbound (gt .Outbound.Port 0)}}{{.Outbound.Port}}{{else}}443{{end}}"
                 placeholder="443" min="1" max="65535">
         </div>
         <div class="form-group">
@@ -159,16 +159,10 @@
 
     <div class="form-actions">
         <button type="button" onclick="closeModal()" class="btn">取消</button>
-        {{if .Outbound}}
-        <button type="button" onclick="testOutboundConnection('{{.Outbound.ID}}')" class="btn btn-secondary">测试连接</button>
-        {{end}}
         <button type="submit" class="btn btn-primary">
             {{if .Outbound}}更新{{else}}创建{{end}}
         </button>
     </div>
-    
-    <!-- Test Result Display -->
-    <div id="test-result" style="display: none; margin-top: 10px; padding: 10px; border-radius: 4px;"></div>
 </form>
 
 <script>
@@ -264,54 +258,14 @@
             if (data.local_ipv6) {
                 document.getElementById('wg_local_ipv6').value = data.local_ipv6;
             }
+            if (data.dns) {
+                document.getElementById('wg_dns').value = data.dns;
+            }
             
             showNotification('配置解析成功', 'success');
         })
         .catch(error => {
             showNotification('解析失败: ' + error.message, 'error');
-        });
-    }
-    
-    // Test outbound connection
-    function testOutboundConnection(outboundId) {
-        const resultDiv = document.getElementById('test-result');
-        resultDiv.style.display = 'block';
-        resultDiv.style.backgroundColor = '#f0f0f0';
-        resultDiv.innerHTML = '正在测试连接...';
-        
-        fetch('/api/outbounds/' + outboundId + '/test', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                resultDiv.style.backgroundColor = '#d4edda';
-                resultDiv.style.color = '#155724';
-                let message = '✓ ' + data.message;
-                if (data.latency_ms) {
-                    message += ' (延迟: ' + data.latency_ms + 'ms)';
-                }
-                if (data.endpoint) {
-                    message += '<br><small>端点: ' + data.endpoint + '</small>';
-                }
-                resultDiv.innerHTML = message;
-            } else {
-                resultDiv.style.backgroundColor = '#f8d7da';
-                resultDiv.style.color = '#721c24';
-                let message = '✗ ' + data.message;
-                if (data.endpoint) {
-                    message += '<br><small>端点: ' + data.endpoint + '</small>';
-                }
-                resultDiv.innerHTML = message;
-            }
-        })
-        .catch(error => {
-            resultDiv.style.backgroundColor = '#f8d7da';
-            resultDiv.style.color = '#721c24';
-            resultDiv.innerHTML = '✗ 测试失败: ' + error.message;
         });
     }
 </script>

@@ -202,12 +202,15 @@ func (s *Server) handleTestOutbound(c *gin.Context) {
 
 	var outbound models.Outbound
 	if err := s.db.First(&outbound, "id = ?", id).Error; err != nil {
-		jsonError(c, http.StatusNotFound, "Outbound not found")
+		c.JSON(http.StatusNotFound, OutboundTestResult{
+			Success: false,
+			Message: "Outbound not found",
+		})
 		return
 	}
 
 	result := testOutboundConnectivity(outbound)
-	jsonOK(c, result)
+	c.JSON(http.StatusOK, result)
 }
 
 // OutboundTestResult represents the result of an outbound connectivity test
