@@ -11,11 +11,11 @@ import (
 type OutboundType string
 
 const (
-	OutboundDirect     OutboundType = "direct"     // Direct internet access
-	OutboundSOCKS5     OutboundType = "socks5"     // SOCKS5 proxy (转到本地其他代理)
-	OutboundWireGuard  OutboundType = "wireguard"  // WireGuard (WARP, Proton VPN 等)
-	OutboundTrojan     OutboundType = "trojan"     // Trojan (自己的其他服务器，落地IP用途)
-	OutboundBlackhole  OutboundType = "blackhole"  // Block traffic
+	OutboundDirect    OutboundType = "direct"    // Direct internet access
+	OutboundSOCKS5    OutboundType = "socks5"    // SOCKS5 proxy (转到本地其他代理)
+	OutboundWireGuard OutboundType = "wireguard" // WireGuard (WARP, Proton VPN 等)
+	OutboundTrojan    OutboundType = "trojan"    // Trojan (自己的其他服务器，落地IP用途)
+	OutboundBlackhole OutboundType = "blackhole" // Block traffic
 )
 
 // Outbound represents an Xray outbound configuration
@@ -31,17 +31,18 @@ type Outbound struct {
 	Password string `json:"-" form:"password"`        // SOCKS5 auth password
 
 	// WireGuard specific settings (WARP, Proton VPN 等)
-	WGSecretKey string `json:"-" form:"wg_secret_key"`               // WireGuard private key
-	WGPublicKey string `json:"wg_public_key" form:"wg_public_key"`   // WireGuard server public key
-	WGEndpoint  string `json:"wg_endpoint" form:"wg_endpoint"`       // WireGuard endpoint (host:port)
-	WGReserved  string `json:"wg_reserved" form:"wg_reserved"`       // Reserved bytes (WARP)
-	WGLocalIPv4 string `json:"wg_local_ipv4" form:"wg_local_ipv4"`   // Assigned IPv4
-	WGLocalIPv6 string `json:"wg_local_ipv6" form:"wg_local_ipv6"`   // Assigned IPv6
-	WGMTU       int    `json:"wg_mtu" form:"wg_mtu"`                 // MTU (default: 1420)
+	WGSecretKey string `json:"-" form:"wg_secret_key"`             // WireGuard private key
+	WGPublicKey string `json:"wg_public_key" form:"wg_public_key"` // WireGuard server public key
+	WGEndpoint  string `json:"wg_endpoint" form:"wg_endpoint"`     // WireGuard endpoint (host:port)
+	WGReserved  string `json:"wg_reserved" form:"wg_reserved"`     // Reserved bytes (WARP only, optional)
+	WGLocalIPv4 string `json:"wg_local_ipv4" form:"wg_local_ipv4"` // Assigned IPv4
+	WGLocalIPv6 string `json:"wg_local_ipv6" form:"wg_local_ipv6"` // Assigned IPv6
+	WGMTU       int    `json:"wg_mtu" form:"wg_mtu"`               // MTU (default: 1420)
+	WGDNS       string `json:"wg_dns" form:"wg_dns"`               // DNS servers (optional, for reference)
 
 	// Trojan specific settings (自己的其他服务器，落地IP用途)
-	TrojanPassword string `json:"-" form:"trojan_password"`         // Trojan password
-	TrojanSNI      string `json:"trojan_sni" form:"trojan_sni"`     // Server Name Indication
+	TrojanPassword string `json:"-" form:"trojan_password"`             // Trojan password
+	TrojanSNI      string `json:"trojan_sni" form:"trojan_sni"`         // Server Name Indication
 	TrojanNetwork  string `json:"trojan_network" form:"trojan_network"` // tcp/ws/grpc
 
 	Enabled   bool      `json:"enabled" form:"enabled" gorm:"default:true"`

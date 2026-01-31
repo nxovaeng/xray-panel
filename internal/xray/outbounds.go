@@ -1,6 +1,11 @@
 package xray
 
 import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+
 	"xray-panel/internal/models"
 )
 
@@ -57,14 +62,36 @@ func (g *Generator) generateOutbounds() []OutboundConfig {
 
 // generateWireGuardOutbound generates a WireGuard outbound (WARP, Proton VPN, etc.)
 func (g *Generator) generateWireGuardOutbound(outbound models.Outbound) OutboundConfig {
-	// Parse reserved bytes
+	// Parse reserved bytes from JSON array format [0,0,0]
 	reserved := []int{0, 0, 0}
-	// TODO: Parse outbound.WGReserved into int array
+	if outbound.WGReserved != "" {
+		// Try to parse as JSON array
+		var parsedReserved []int
+		if err := json.Unmarshal([]byte(outbound.WGReserved), &parsedReserved); err == nil && len(parsedReserved) == 3 {
+			reserved = parsedReserved
+		} else {
+			// Try to parse as comma-separated values: "0,0,0"
+			parts := strings.Split(strings.Trim(outbound.WGReserved, "[] "), ",")
+			if len(parts) == 3 {
+				for i, part := range parts {
+					if val, err := strconv.Atoi(strings.TrimSpace(part)); err == nil {
+						reserved[i] = val
+					}
+				}
+			}
+		}
+	}
+
+	// Build endpoint from Server and Port
+	endpoint := outbound.Server
+	if outbound.Port > 0 {
+		endpoint = fmt.Sprintf("%s:%d", outbound.Server, outbound.Port)
+	}
 
 	peers := []map[string]interface{}{
 		{
 			"publicKey": outbound.WGPublicKey,
-			"endpoint":  outbound.Server + ":" + string(rune(outbound.Port)),
+			"endpoint":  endpoint,
 		},
 	}
 
@@ -121,7 +148,6 @@ func (g *Generator) generateSOCKS5Outbound(outbound models.Outbound) OutboundCon
 		},
 	}
 }
-
 
 // generateTrojanOutbound generates a Trojan outbound
 func (g *Generator) generateTrojanOutbound(outbound models.Outbound) OutboundConfig {

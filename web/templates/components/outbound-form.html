@@ -46,16 +46,27 @@
 
     <!-- WireGuard Fields -->
     <div id="wireguard-fields" class="protocol-fields" style="display: {{if and .Outbound (eq .Outbound.Type "wireguard")}}block{{else}}none{{end}};">
+        <!-- WireGuard Config Import -->
         <div class="form-group">
-            <label for="wg_server">服务器地址</label>
-            <input type="text" id="wg_server" name="server" value="{{if .Outbound}}{{.Outbound.Server}}{{end}}"
-                placeholder="engage.cloudflareclient.com">
-            <small class="form-hint">WireGuard 服务器地址</small>
+            <label for="wg_config_import">导入 WireGuard 配置</label>
+            <textarea id="wg_config_import" rows="4" placeholder="粘贴 WireGuard 配置文件内容（从 ProtonVPN、WARP 等获取）..."></textarea>
+            <div class="input-with-button" style="margin-top: 8px;">
+                <button type="button" class="btn btn-secondary" onclick="parseWireGuardConfig()">解析配置</button>
+                <small class="form-hint" style="margin-left: 10px;">自动填充下方字段</small>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="wg_server_addr">服务器地址</label>
+            <input type="text" id="wg_server_addr" name="wg_server" value="{{if .Outbound}}{{.Outbound.Server}}{{end}}"
+                placeholder="engage.cloudflareclient.com 或 185.177.124.84">
+            <small class="form-hint">WireGuard 服务器地址（域名或 IP）</small>
         </div>
         <div class="form-group">
-            <label for="wg_port">端口</label>
-            <input type="number" id="wg_port" name="port" value="{{if .Outbound}}{{.Outbound.Port}}{{else}}2408{{end}}"
-                placeholder="2408" min="1" max="65535">
+            <label for="wg_server_port">端口</label>
+            <input type="number" id="wg_server_port" name="wg_port" value="{{if .Outbound}}{{if .Outbound.Port}}{{.Outbound.Port}}{{else}}51820{{end}}{{else}}51820{{end}}"
+                placeholder="51820" min="1" max="65535">
+            <small class="form-hint">WireGuard 端口（WARP: 2408, ProtonVPN: 51820）</small>
         </div>
         <div class="form-group">
             <label for="wg_secret_key">私钥 (Private Key)</label>
@@ -82,11 +93,11 @@
                 placeholder="2606:4700:110:8a36:df92:102a:9602:fa18/128">
         </div>
         <div class="form-group">
-            <label for="wg_reserved">Reserved (WARP 专用)</label>
+            <label for="wg_reserved">Reserved (可选，仅 WARP 需要)</label>
             <input type="text" id="wg_reserved" name="wg_reserved"
                 value="{{if .Outbound}}{{.Outbound.WGReserved}}{{end}}"
                 placeholder="[0,0,0]">
-            <small class="form-hint">WARP 保留字节，格式: [0,0,0]</small>
+            <small class="form-hint">WARP 保留字节，格式: [0,0,0]。ProtonVPN 等不需要此字段</small>
         </div>
         <div class="form-group">
             <label for="wg_mtu">MTU (可选)</label>
@@ -94,6 +105,13 @@
                 value="{{if .Outbound}}{{if .Outbound.WGMTU}}{{.Outbound.WGMTU}}{{end}}{{end}}"
                 placeholder="1420" min="1280" max="1500">
             <small class="form-hint">默认: 1420</small>
+        </div>
+        <div class="form-group">
+            <label for="wg_dns">DNS (仅供参考)</label>
+            <input type="text" id="wg_dns" name="wg_dns"
+                value="{{if .Outbound}}{{.Outbound.WGDNS}}{{end}}"
+                placeholder="10.2.0.1">
+            <small class="form-hint">WireGuard 配置中的 DNS 服务器（Xray 使用自己的 DNS 模块，此字段仅供参考）</small>
         </div>
     </div>
 
@@ -141,10 +159,16 @@
 
     <div class="form-actions">
         <button type="button" onclick="closeModal()" class="btn">取消</button>
+        {{if .Outbound}}
+        <button type="button" onclick="testOutboundConnection('{{.Outbound.ID}}')" class="btn btn-secondary">测试连接</button>
+        {{end}}
         <button type="submit" class="btn btn-primary">
             {{if .Outbound}}更新{{else}}创建{{end}}
         </button>
     </div>
+    
+    <!-- Test Result Display -->
+    <div id="test-result" style="display: none; margin-top: 10px; padding: 10px; border-radius: 4px;"></div>
 </form>
 
 <script>
@@ -174,9 +198,8 @@
         } else if (type === 'wireguard') {
             wireguardFields.style.display = 'block';
             // WireGuard required fields
-            document.getElementById('wg_server').setAttribute('required', 'required');
-            document.getElementById('wg_port').setAttribute('required', 'required');
-            document.getElementById('wg_secret_key').setAttribute('required', 'required');
+            document.getElementById('wg_server_addr').setAttribute('required', 'required');
+            document.getElementById('wg_server_port').setAttribute('required', 'required');
             document.getElementById('wg_public_key').setAttribute('required', 'required');
             document.getElementById('wg_local_ipv4').setAttribute('required', 'required');
         } else if (type === 'trojan') {
@@ -199,5 +222,97 @@
             }
         }, 10);
     })();
+    
+    // Parse WireGuard configuration
+    function parseWireGuardConfig() {
+        const configText = document.getElementById('wg_config_import').value;
+        if (!configText.trim()) {
+            showNotification('请先粘贴 WireGuard 配置', 'error');
+            return;
+        }
+        
+        fetch('/api/outbounds/parse-wireguard', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ config: configText })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showNotification('解析失败: ' + data.error, 'error');
+                return;
+            }
+            
+            // Fill in the form fields
+            if (data.private_key) {
+                document.getElementById('wg_secret_key').value = data.private_key;
+            }
+            if (data.public_key) {
+                document.getElementById('wg_public_key').value = data.public_key;
+            }
+            if (data.server) {
+                document.getElementById('wg_server_addr').value = data.server;
+            }
+            if (data.port) {
+                document.getElementById('wg_server_port').value = data.port;
+            }
+            if (data.local_ipv4) {
+                document.getElementById('wg_local_ipv4').value = data.local_ipv4;
+            }
+            if (data.local_ipv6) {
+                document.getElementById('wg_local_ipv6').value = data.local_ipv6;
+            }
+            
+            showNotification('配置解析成功', 'success');
+        })
+        .catch(error => {
+            showNotification('解析失败: ' + error.message, 'error');
+        });
+    }
+    
+    // Test outbound connection
+    function testOutboundConnection(outboundId) {
+        const resultDiv = document.getElementById('test-result');
+        resultDiv.style.display = 'block';
+        resultDiv.style.backgroundColor = '#f0f0f0';
+        resultDiv.innerHTML = '正在测试连接...';
+        
+        fetch('/api/outbounds/' + outboundId + '/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                resultDiv.style.backgroundColor = '#d4edda';
+                resultDiv.style.color = '#155724';
+                let message = '✓ ' + data.message;
+                if (data.latency_ms) {
+                    message += ' (延迟: ' + data.latency_ms + 'ms)';
+                }
+                if (data.endpoint) {
+                    message += '<br><small>端点: ' + data.endpoint + '</small>';
+                }
+                resultDiv.innerHTML = message;
+            } else {
+                resultDiv.style.backgroundColor = '#f8d7da';
+                resultDiv.style.color = '#721c24';
+                let message = '✗ ' + data.message;
+                if (data.endpoint) {
+                    message += '<br><small>端点: ' + data.endpoint + '</small>';
+                }
+                resultDiv.innerHTML = message;
+            }
+        })
+        .catch(error => {
+            resultDiv.style.backgroundColor = '#f8d7da';
+            resultDiv.style.color = '#721c24';
+            resultDiv.innerHTML = '✗ 测试失败: ' + error.message;
+        });
+    }
 </script>
 {{end}}

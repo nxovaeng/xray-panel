@@ -224,6 +224,8 @@ func (s *Server) setupRoutes() {
 				outbounds.GET("/:id", s.handleGetOutbound)
 				outbounds.PUT("/:id", s.handleUpdateOutbound)
 				outbounds.DELETE("/:id", s.handleDeleteOutbound)
+				outbounds.POST("/:id/test", s.handleTestOutbound)
+				outbounds.POST("/parse-wireguard", s.handleParseWireGuardConfig)
 			}
 
 			// Routing rules
