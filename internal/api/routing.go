@@ -396,6 +396,9 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 		return
 	}
 
+	// Detect if this is an acme.sh directory
+	isAcmeShDir := strings.Contains(certDir, ".acme.sh") || strings.Contains(certDir, "acme.sh")
+
 	entries, err := os.ReadDir(certDir)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "读取证书目录失败: "+err.Error())
@@ -404,28 +407,62 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 
 	importedCount := 0
 	skippedCount := 0
+	var importErrors []string
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 
-		domain := entry.Name()
+		dirName := entry.Name()
 
-		// Skip hidden directories and special directories
-		if strings.HasPrefix(domain, ".") || domain == "README" || domain == "ca" {
+		// Skip system directories
+		if dirName == "." || dirName == ".." {
 			continue
 		}
 
-		domainPath := filepath.Join(certDir, domain)
+		// If this is acme.sh directory, skip acme.sh's own directories
+		if isAcmeShDir {
+			skipDirs := []string{
+				"account.conf", "acme.sh", "acme.sh.env", "ca",
+				"deploy", "dnsapi", "http.header", "notify",
+			}
+			shouldSkip := false
+			for _, skip := range skipDirs {
+				if dirName == skip {
+					shouldSkip = true
+					break
+				}
+			}
+			if shouldSkip {
+				continue
+			}
+		} else {
+			// For non-acme.sh directories, skip common special dirs
+			if dirName == "README" || dirName == "ca" {
+				continue
+			}
+		}
 
-		// Find certificate files (acme.sh or Let's Encrypt structure)
+		domainPath := filepath.Join(certDir, dirName)
+
+		// Extract actual domain name from directory name
+		domain := dirName
+
+		// Remove _ecc or _rsa suffix to get actual domain
+		if strings.HasSuffix(domain, "_ecc") {
+			domain = strings.TrimSuffix(domain, "_ecc")
+		} else if strings.HasSuffix(domain, "_rsa") {
+			domain = strings.TrimSuffix(domain, "_rsa")
+		}
+
+		// Find certificate files
 		var certPath, keyPath string
 
 		// Check for acme.sh structure
+		acmeCertPath := filepath.Join(domainPath, dirName+".cer")
 		acmeFullchainPath := filepath.Join(domainPath, "fullchain.cer")
-		acmeCertPath := filepath.Join(domainPath, domain+".cer")
-		acmeKeyPath := filepath.Join(domainPath, domain+".key")
+		acmeKeyPath := filepath.Join(domainPath, dirName+".key")
 
 		if fileExists(acmeFullchainPath) {
 			certPath = acmeFullchainPath
@@ -452,21 +489,16 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 			continue
 		}
 
-		// Convert acme.sh domain format to actual domain
-		// acme.sh uses _wildcard.example.com for *.example.com
-		actualDomain := domain
-		if strings.HasPrefix(domain, "_wildcard.") {
-			actualDomain = "*." + strings.TrimPrefix(domain, "_wildcard.")
-		}
-
 		// Check if domain already exists
 		var existingDomain models.Domain
-		if err := s.db.Where("domain = ?", actualDomain).First(&existingDomain).Error; err == nil {
+		if err := s.db.Where("domain = ?", domain).First(&existingDomain).Error; err == nil {
 			// Domain exists, update cert paths if different
 			if existingDomain.CertPath != certPath || existingDomain.KeyPath != keyPath {
 				existingDomain.CertPath = certPath
 				existingDomain.KeyPath = keyPath
-				s.db.Save(&existingDomain)
+				if err := s.db.Save(&existingDomain).Error; err != nil {
+					importErrors = append(importErrors, fmt.Sprintf("更新 %s 失败: %v", domain, err))
+				}
 			}
 			skippedCount++
 			continue
@@ -474,7 +506,7 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 
 		// Create new domain
 		newDomain := models.Domain{
-			Domain:   actualDomain,
+			Domain:   domain,
 			Type:     models.DomainTypeDirect,
 			CertPath: certPath,
 			KeyPath:  keyPath,
@@ -482,6 +514,7 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 		}
 
 		if err := s.db.Create(&newDomain).Error; err != nil {
+			importErrors = append(importErrors, fmt.Sprintf("导入 %s 失败: %v", domain, err))
 			continue
 		}
 
@@ -495,8 +528,14 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 		return
 	}
 
+	// Build notification message
+	message := fmt.Sprintf("导入完成：新增 %d 个，跳过 %d 个", importedCount, skippedCount)
+	if len(importErrors) > 0 {
+		message += fmt.Sprintf("，失败 %d 个", len(importErrors))
+	}
+
 	// Set response header to notify about import results
-	c.Header("HX-Trigger", fmt.Sprintf(`{"showNotification": {"type": "success", "message": "导入完成：新增 %d 个，跳过 %d 个"}}`, importedCount, skippedCount))
+	c.Header("HX-Trigger", fmt.Sprintf(`{"showNotification": {"type": "success", "message": "%s"}}`, message))
 
 	c.HTML(http.StatusOK, "components/domains-table.html", gin.H{
 		"Domains": domains,
