@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	version   = "0.1.0"
-	buildTime = "unknown"
+	Version   = "0.1.0"
+	BuildTime = "unknown"
 )
 
 func main() {
@@ -74,12 +74,12 @@ func printUsage() {
   panel nginx reload                       # 重载 Nginx
   panel nginx panel -d example.com         # 生成面板配置
 
-`, version)
+`, Version)
 }
 
 func cmdVersion() {
-	fmt.Printf("xray-panel version %s\n", version)
-	fmt.Printf("Build time: %s\n", buildTime)
+	fmt.Printf("xray-panel version %s\n", Version)
+	fmt.Printf("Build time: %s\n", BuildTime)
 }
 
 func cmdAdmin() {

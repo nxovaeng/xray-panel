@@ -238,14 +238,11 @@ configure_nginx() {
 create_systemd_service() {
     log_info "创建 systemd 服务..."
     
-    # 设置日志目录权限（755 = rwxr-xr-x，所有用户可读）
-    chmod 755 "$LOG_DIR"
-    
     cat > "$SYSTEMD_SERVICE" <<EOF
 [Unit]
 Description=Xray Panel Service
 Documentation=https://github.com/nxovaeng/xray-panel
-After=network.target nss-lookup.target
+After=network.target
 
 [Service]
 Type=simple
@@ -254,18 +251,6 @@ WorkingDirectory=$INSTALL_DIR
 ExecStart=$INSTALL_DIR/panel server -config $CONFIG_DIR/config.yaml
 Restart=on-failure
 RestartSec=10
-LimitNOFILE=65536
-
-# Logging
-StandardOutput=append:$LOG_DIR/panel.stdout.log
-StandardError=append:$LOG_DIR/panel.stderr.log
-
-# Security
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$DATA_DIR $LOG_DIR $CONFIG_DIR
 
 [Install]
 WantedBy=multi-user.target
@@ -274,12 +259,7 @@ EOF
     systemctl daemon-reload
     systemctl enable xray-panel
     
-    # 设置日志文件权限（644 = rw-r--r--，所有用户可读）
-    touch "$LOG_DIR/panel.stdout.log" "$LOG_DIR/panel.stderr.log"
-    chmod 644 "$LOG_DIR/panel.stdout.log" "$LOG_DIR/panel.stderr.log"
-    
     log_success "Systemd 服务已创建并启用"
-    log_info "日志文件权限已设置为所有用户可读"
 }
 
 # 安装管理脚本
