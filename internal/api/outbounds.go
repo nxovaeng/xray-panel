@@ -254,7 +254,7 @@ func testWireGuardConnectivity(outbound models.Outbound) OutboundTestResult {
 		}
 	}
 
-	endpoint := fmt.Sprintf("%s:%d", outbound.Server, outbound.Port)
+	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
 
 	// Test UDP connectivity to WireGuard endpoint
 	// WireGuard uses UDP, so we test UDP reachability
@@ -280,7 +280,7 @@ func testWireGuardConnectivity(outbound models.Outbound) OutboundTestResult {
 
 	// Try to connect via UDP (WireGuard uses UDP)
 	for _, ip := range ips {
-		addr := fmt.Sprintf("%s:%d", ip, outbound.Port)
+		addr := net.JoinHostPort(ip, fmt.Sprintf("%d", outbound.Port))
 		conn, err := net.DialTimeout("udp", addr, 5*time.Second)
 		if err != nil {
 			continue
@@ -315,7 +315,7 @@ func testSOCKS5Connectivity(outbound models.Outbound) OutboundTestResult {
 		}
 	}
 
-	endpoint := fmt.Sprintf("%s:%d", outbound.Server, outbound.Port)
+	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
 	start := time.Now()
 
 	// Test TCP connectivity to SOCKS5 proxy
@@ -383,7 +383,7 @@ func testTrojanConnectivity(outbound models.Outbound) OutboundTestResult {
 		}
 	}
 
-	endpoint := fmt.Sprintf("%s:%d", outbound.Server, outbound.Port)
+	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
 	start := time.Now()
 
 	// Test TCP connectivity to Trojan server

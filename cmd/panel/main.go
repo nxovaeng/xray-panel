@@ -98,7 +98,7 @@ func cmdResetPassword() {
 	password := fs.String("p", "", "新密码 (必需)")
 	password2 := fs.String("password", "", "新密码 (必需)")
 	configPath := fs.String("config", "", "配置文件路径")
-	
+
 	fs.Usage = func() {
 		fmt.Println("用法: panel reset-password [flags]")
 		fmt.Println("\n重置管理员密码")
@@ -108,7 +108,7 @@ func cmdResetPassword() {
 		fmt.Println("  panel reset-password -u admin -p newpassword")
 		fmt.Println("  panel reset-password --username admin --password newpassword")
 	}
-	
+
 	fs.Parse(os.Args[2:])
 
 	// Support both short and long flags
@@ -128,11 +128,11 @@ func cmdResetPassword() {
 	}
 
 	_, db := initSystem(*configPath)
-	
+
 	if err := database.ResetAdminPassword(db, user, pass); err != nil {
 		logger.Fatal("重置密码失败: %v", err)
 	}
-	
+
 	fmt.Printf("✅ 用户 '%s' 的密码已成功重置\n", user)
 }
 
@@ -148,7 +148,7 @@ func cmdNginx() {
 	}
 
 	action := os.Args[2]
-	
+
 	switch action {
 	case "sync":
 		nginxSync()
@@ -166,30 +166,30 @@ func cmdNginx() {
 func nginxSync() {
 	fs := flag.NewFlagSet("nginx sync", flag.ExitOnError)
 	configPath := fs.String("config", "", "配置文件路径")
-	
+
 	fs.Usage = func() {
 		fmt.Println("用法: panel nginx sync [flags]")
 		fmt.Println("\n从数据库同步生成所有 Nginx 配置文件")
 		fmt.Println("\n参数:")
 		fs.PrintDefaults()
 	}
-	
+
 	fs.Parse(os.Args[3:])
 
 	cfg, db := initSystem(*configPath)
 	ng := nginx.NewGenerator(cfg.Nginx.ConfigDir, cfg.Nginx.StreamDir)
 
 	logger.Info("正在同步 Nginx 配置...")
-	
+
 	var inbounds []models.Inbound
 	if err := db.Preload("Domain").Where("enabled = ?", true).Find(&inbounds).Error; err != nil {
 		logger.Fatal("查询入站配置失败: %v", err)
 	}
-	
+
 	if err := ng.GenerateHTTPConfig(inbounds); err != nil {
 		logger.Fatal("生成 HTTP 配置失败: %v", err)
 	}
-	
+
 	logger.Info("✅ Nginx 配置已成功生成")
 	fmt.Println("💡 提示: 运行 'panel nginx reload' 重载配置")
 }
@@ -197,25 +197,25 @@ func nginxSync() {
 func nginxReload() {
 	fs := flag.NewFlagSet("nginx reload", flag.ExitOnError)
 	configPath := fs.String("config", "", "配置文件路径")
-	
+
 	fs.Usage = func() {
 		fmt.Println("用法: panel nginx reload [flags]")
 		fmt.Println("\n重载 Nginx 服务")
 		fmt.Println("\n参数:")
 		fs.PrintDefaults()
 	}
-	
+
 	fs.Parse(os.Args[3:])
 
 	cfg, _ := initSystem(*configPath)
 	ng := nginx.NewGenerator(cfg.Nginx.ConfigDir, cfg.Nginx.StreamDir)
 
 	logger.Info("正在重载 Nginx...")
-	
+
 	if err := ng.Reload(); err != nil {
 		logger.Fatal("重载 Nginx 失败: %v", err)
 	}
-	
+
 	logger.Info("✅ Nginx 已成功重载")
 }
 
@@ -226,7 +226,7 @@ func nginxPanel() {
 	certPath := fs.String("cert", "", "SSL 证书路径 (必需)")
 	keyPath := fs.String("key", "", "SSL 密钥路径 (必需)")
 	configPath := fs.String("config", "", "配置文件路径")
-	
+
 	fs.Usage = func() {
 		fmt.Println("用法: panel nginx panel [flags]")
 		fmt.Println("\n为面板生成 Nginx 反向代理配置")
@@ -235,7 +235,7 @@ func nginxPanel() {
 		fmt.Println("\n示例:")
 		fmt.Println("  panel nginx panel -d panel.example.com -cert /path/to/cert.pem -key /path/to/key.pem")
 	}
-	
+
 	fs.Parse(os.Args[3:])
 
 	// Support both short and long flags
@@ -254,11 +254,11 @@ func nginxPanel() {
 	ng := nginx.NewGenerator(cfg.Nginx.ConfigDir, cfg.Nginx.StreamDir)
 
 	logger.Info("正在为面板生成 Nginx 配置 (%s)...", dom)
-	
+
 	if err := ng.GeneratePanelConfig(dom, *certPath, *keyPath, cfg.Server.Listen); err != nil {
 		logger.Fatal("生成面板配置失败: %v", err)
 	}
-	
+
 	logger.Info("✅ 面板配置已生成")
 	fmt.Println("💡 提示: 运行 'panel nginx reload' 重载配置")
 }
@@ -266,7 +266,7 @@ func nginxPanel() {
 func runServer() {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
 	configPath := fs.String("config", "", "配置文件路径")
-	
+
 	// Parse flags after "start/run/server" or from beginning if no subcommand
 	args := os.Args[1:]
 	if len(os.Args) > 1 && (os.Args[1] == "start" || os.Args[1] == "run" || os.Args[1] == "server") {
@@ -290,7 +290,7 @@ func runServer() {
 	logger.Info("使用配置文件: %s", *configPath)
 	server := api.NewServer(cfg, db)
 	logger.Info("正在启动 xray-panel，监听地址: %s", cfg.Server.Listen)
-	
+
 	if err := server.Run(); err != nil {
 		logger.Fatal("服务器错误: %v", err)
 	}
@@ -418,8 +418,6 @@ func showAdminInfo(db *gorm.DB) {
 		if admin.Email != "" {
 			fmt.Printf("  邮箱:     %s\n", admin.Email)
 		}
-		fmt.Printf("  创建时间: %s\n", admin.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("  更新时间: %s\n", admin.UpdatedAt.Format("2006-01-02 15:04:05"))
 	}
 	fmt.Println("\n========================================")
 	fmt.Println("💡 提示:")

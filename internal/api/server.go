@@ -43,6 +43,7 @@ func NewServer(cfg *config.Config, db *gorm.DB) *Server {
 	// Create Nginx config generator
 	nginxGen := nginx.NewGenerator(cfg.Nginx.ConfigDir, cfg.Nginx.StreamDir)
 	nginxGen.SetDB(db)
+	nginxGen.SetSocketDir(cfg.Xray.SocketDir)
 	if cfg.Nginx.ReloadCmd != "" {
 		nginxGen.SetReloadCmd(cfg.Nginx.ReloadCmd)
 	}

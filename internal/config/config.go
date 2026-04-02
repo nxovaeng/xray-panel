@@ -57,6 +57,7 @@ type XrayConfig struct {
 	ConfigPath string `yaml:"config_path"`
 	AssetsPath string `yaml:"assets_path"`
 	APIPort    int    `yaml:"api_port"`
+	SocketDir  string `yaml:"socket_dir"`
 }
 
 // NginxConfig holds Nginx settings
@@ -114,6 +115,7 @@ func Default() *Config {
 			ConfigPath: "/usr/local/etc/xray/config.json",
 			AssetsPath: "/usr/local/share/xray",
 			APIPort:    10085,
+			SocketDir:  "/dev/shm",
 		},
 		Nginx: NginxConfig{
 			ConfigDir: "/etc/nginx/conf.d",

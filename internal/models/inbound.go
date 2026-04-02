@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -61,6 +62,7 @@ type Inbound struct {
 	ConnectDomain string `json:"connect_domain" form:"connect_domain"`
 
 	Enabled   bool      `json:"enabled" form:"enabled" gorm:"default:true"`
+	UseUDS    bool      `json:"use_uds" form:"use_uds" gorm:"default:true"`
 	Remark    string    `json:"remark" form:"remark"`
 	CreatedAt time.Time `json:"created_at" form:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" form:"updated_at"`
@@ -100,4 +102,13 @@ func (i *Inbound) IsTrojan() bool {
 // IsVLESS returns true if protocol is VLESS
 func (i *Inbound) IsVLESS() bool {
 	return i.Protocol == ProtocolVLESS
+}
+
+// SocketPath returns the Unix Domain Socket path for this inbound.
+// socketDir defaults to /dev/shm if empty.
+func (i *Inbound) SocketPath(socketDir string) string {
+	if socketDir == "" {
+		socketDir = "/dev/shm"
+	}
+	return fmt.Sprintf("%s/xray-%s.sock", socketDir, i.Tag)
 }

@@ -23,6 +23,7 @@ type ConfigGenerator struct {
 	streamDir string
 	reloadCmd string
 	db        *gorm.DB
+	socketDir string
 }
 
 // NewGenerator creates a new Nginx config generator
@@ -31,6 +32,7 @@ func NewGenerator(configDir, streamDir string) *ConfigGenerator {
 		configDir: configDir,
 		streamDir: streamDir,
 		reloadCmd: "systemctl reload nginx",
+		socketDir: "/dev/shm",
 	}
 }
 
@@ -42,6 +44,13 @@ func (g *ConfigGenerator) SetDB(db *gorm.DB) {
 // SetReloadCmd sets custom reload command
 func (g *ConfigGenerator) SetReloadCmd(cmd string) {
 	g.reloadCmd = cmd
+}
+
+// SetSocketDir sets the Unix Domain Socket directory
+func (g *ConfigGenerator) SetSocketDir(dir string) {
+	if dir != "" {
+		g.socketDir = dir
+	}
 }
 
 // Reload reloads Nginx configuration
@@ -278,6 +287,17 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 
 	// Proxy locations for each inbound
 	for _, i := range inbounds {
+		// Determine upstream address based on UDS mode
+		var grpcUpstream, httpUpstream string
+		if i.UseUDS {
+			sockPath := i.SocketPath(g.socketDir)
+			grpcUpstream = fmt.Sprintf("grpc://unix:%s", sockPath)
+			httpUpstream = fmt.Sprintf("http://unix:%s", sockPath)
+		} else {
+			grpcUpstream = fmt.Sprintf("grpc://127.0.0.1:%d", i.Port)
+			httpUpstream = fmt.Sprintf("http://127.0.0.1:%d", i.Port)
+		}
+
 		if i.IsGRPC() {
 			sb.WriteString(fmt.Sprintf("    # gRPC: %s", i.Tag))
 			if i.ActualDomain != "" {
@@ -288,7 +308,7 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 			sb.WriteString("        if ($content_type !~ \"application/grpc\") {\n")
 			sb.WriteString("            return 404;\n")
 			sb.WriteString("        }\n")
-			sb.WriteString(fmt.Sprintf("        grpc_pass grpc://127.0.0.1:%d;\n", i.Port))
+			sb.WriteString(fmt.Sprintf("        grpc_pass %s;\n", grpcUpstream))
 			sb.WriteString("        grpc_set_header Host $host;\n")
 			sb.WriteString("        grpc_set_header X-Real-IP $remote_addr;\n")
 			sb.WriteString("        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
@@ -300,7 +320,7 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 			}
 			sb.WriteString("\n")
 			sb.WriteString(fmt.Sprintf("    location %s {\n", i.Path))
-			sb.WriteString(fmt.Sprintf("        grpc_pass grpc://127.0.0.1:%d;\n", i.Port))
+			sb.WriteString(fmt.Sprintf("        grpc_pass %s;\n", grpcUpstream))
 			sb.WriteString("        grpc_set_header Host $host;\n")
 			sb.WriteString("        grpc_set_header X-Real-IP $remote_addr;\n")
 			sb.WriteString("        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
@@ -317,7 +337,7 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 			sb.WriteString("\n")
 			sb.WriteString(fmt.Sprintf("    location %s {\n", i.Path))
 			sb.WriteString("        proxy_redirect off;\n")
-			sb.WriteString(fmt.Sprintf("        proxy_pass http://127.0.0.1:%d;\n", i.Port))
+			sb.WriteString(fmt.Sprintf("        proxy_pass %s;\n", httpUpstream))
 			sb.WriteString("        proxy_http_version 1.1;\n")
 			sb.WriteString("        proxy_set_header Upgrade $http_upgrade;\n")
 			sb.WriteString("        proxy_set_header Connection \"upgrade\";\n")

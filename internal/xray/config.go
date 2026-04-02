@@ -74,6 +74,7 @@ type Generator struct {
 	domains   map[string]models.Domain
 	apiPort   int
 	logLevel  string
+	socketDir string
 }
 
 // NewGenerator creates a new configuration generator
@@ -126,6 +127,12 @@ func (g *Generator) SetAPIPort(port int) *Generator {
 // SetLogLevel sets the log level
 func (g *Generator) SetLogLevel(level string) *Generator {
 	g.logLevel = level
+	return g
+}
+
+// SetSocketDir sets the directory for Unix Domain Sockets
+func (g *Generator) SetSocketDir(dir string) *Generator {
+	g.socketDir = dir
 	return g
 }
 

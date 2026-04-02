@@ -88,10 +88,18 @@ type SniffingConfig struct {
 
 // generateInbound generates a single inbound configuration
 func (g *Generator) generateInbound(inbound models.Inbound) (*InboundConfig, error) {
+	// Determine listen address and port
+	listen := inbound.Listen
+	var port interface{} = inbound.Port
+	if inbound.UseUDS {
+		listen = inbound.SocketPath(g.socketDir)
+		port = 0
+	}
+
 	config := &InboundConfig{
 		Tag:      inbound.Tag,
-		Listen:   inbound.Listen,
-		Port:     inbound.Port,
+		Listen:   listen,
+		Port:     port,
 		Protocol: string(inbound.Protocol),
 		Sniffing: &SniffingConfig{
 			Enabled:      true,
@@ -160,6 +168,7 @@ func (g *Generator) generateVLESSSettings() map[string]interface{} {
 	for _, user := range g.getActiveUsers() {
 		client := map[string]interface{}{
 			"id":    user.UUID,
+			"flow":  "",
 			"email": user.Email,
 			"level": 0,
 		}

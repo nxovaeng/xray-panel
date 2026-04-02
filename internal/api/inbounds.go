@@ -27,6 +27,7 @@ type CreateInboundRequest struct {
 	ConnectDomain string           `json:"connect_domain"` // 连接目标域名（CDN域名或父域名）
 	RandomPort    bool             `json:"random_port"`    // 是否生成随机端口
 	RandomPath    bool             `json:"random_path"`    // 是否生成随机路径
+	UseUDS        *bool            `json:"use_uds"`        // 使用 Unix Domain Socket（默认 true）
 }
 
 // generateRandomPort generates a random port between 10000 and 60000
@@ -96,6 +97,12 @@ func (s *Server) handleCreateInbound(c *gin.Context) {
 		Remark:        req.Remark,
 		ConnectDomain: req.ConnectDomain,
 		Enabled:       true,
+		UseUDS:        true, // 默认使用 UDS
+	}
+
+	// 如果显式传入 use_uds=false，则关闭 UDS
+	if req.UseUDS != nil {
+		inbound.UseUDS = *req.UseUDS
 	}
 
 	// Set defaults
@@ -172,6 +179,11 @@ func (s *Server) handleUpdateInbound(c *gin.Context) {
 	inbound.Mode = req.Mode
 	inbound.Remark = req.Remark
 	inbound.ConnectDomain = req.ConnectDomain
+
+	// 更新 UDS 设置
+	if req.UseUDS != nil {
+		inbound.UseUDS = *req.UseUDS
+	}
 
 	if err := s.db.Save(&inbound).Error; err != nil {
 		jsonError(c, http.StatusInternalServerError, "Failed to update inbound")

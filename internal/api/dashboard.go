@@ -151,6 +151,7 @@ func (s *Server) handleApplyXrayConfig(c *gin.Context) {
 	s.db.Preload("Domain").Where("enabled = ?", true).Find(&inbounds)
 
 	nginxGen := nginx.NewGenerator(s.config.Nginx.ConfigDir, s.config.Nginx.StreamDir)
+	nginxGen.SetSocketDir(s.config.Xray.SocketDir)
 
 	// Generate HTTP configs
 	if err := nginxGen.GenerateHTTPConfig(inbounds); err != nil {
@@ -224,6 +225,7 @@ func (s *Server) generateXrayConfig() ([]byte, error) {
 	generator.SetRoutingRules(rules)
 	generator.SetDomains(domains)
 	generator.SetAPIPort(s.config.Xray.APIPort)
+	generator.SetSocketDir(s.config.Xray.SocketDir)
 
 	return generator.GenerateJSON()
 }
