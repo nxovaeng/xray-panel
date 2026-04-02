@@ -2,6 +2,7 @@ package nginx
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -169,54 +170,20 @@ func (g *ConfigGenerator) GeneratePanelConfig(domain, certPath, keyPath, listenA
 	parts := strings.Split(listenAddr, ":")
 	port := parts[len(parts)-1]
 
-	var sb strings.Builder
+	data := panelTmplData{
+		Domain:   domain,
+		CertPath: certPath,
+		KeyPath:  keyPath,
+		Port:     port,
+	}
 
-	// HTTP to HTTPS redirect
-	sb.WriteString("server {\n")
-	sb.WriteString("    listen 80;\n")
-	sb.WriteString("    listen [::]:80;\n")
-	sb.WriteString(fmt.Sprintf("    server_name %s;\n", domain))
-	sb.WriteString("    return 301 https://$host$request_uri;\n")
-	sb.WriteString("}\n\n")
-
-	// HTTPS server block
-	sb.WriteString("server {\n")
-	sb.WriteString("    listen 443 ssl http2;\n")
-	sb.WriteString("    listen [::]:443 ssl http2;\n")
-	sb.WriteString(fmt.Sprintf("    server_name %s;\n\n", domain))
-
-	// SSL Configuration
-	sb.WriteString(fmt.Sprintf("    ssl_certificate %s;\n", certPath))
-	sb.WriteString(fmt.Sprintf("    ssl_certificate_key %s;\n", keyPath))
-	sb.WriteString("    ssl_protocols TLSv1.2 TLSv1.3;\n")
-	sb.WriteString("    ssl_ciphers HIGH:!aNULL:!MD5;\n")
-	sb.WriteString("    ssl_prefer_server_ciphers on;\n")
-	sb.WriteString("    ssl_session_cache shared:SSL:10m;\n")
-	sb.WriteString("    ssl_session_timeout 10m;\n\n")
-
-	// Security Headers
-	sb.WriteString("    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n")
-	sb.WriteString("    add_header X-Frame-Options \"SAMEORIGIN\" always;\n")
-	sb.WriteString("    add_header X-Content-Type-Options \"nosniff\" always;\n")
-	sb.WriteString("    add_header X-XSS-Protection \"1; mode=block\" always;\n\n")
-
-	// Proxy location
-	sb.WriteString("    location / {\n")
-	sb.WriteString(fmt.Sprintf("        proxy_pass http://127.0.0.1:%s;\n", port))
-	sb.WriteString("        proxy_set_header Host $host;\n")
-	sb.WriteString("        proxy_set_header X-Real-IP $remote_addr;\n")
-	sb.WriteString("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
-	sb.WriteString("        proxy_set_header X-Forwarded-Proto $scheme;\n")
-	sb.WriteString("        \n")
-	sb.WriteString("        # WebSocket support\n")
-	sb.WriteString("        proxy_http_version 1.1;\n")
-	sb.WriteString("        proxy_set_header Upgrade $http_upgrade;\n")
-	sb.WriteString("        proxy_set_header Connection \"upgrade\";\n")
-	sb.WriteString("    }\n")
-	sb.WriteString("}\n")
+	var buf bytes.Buffer
+	if err := panelConfigTmpl.Execute(&buf, data); err != nil {
+		return fmt.Errorf("failed to execute panel template: %w", err)
+	}
 
 	filename := filepath.Join(g.configDir, fmt.Sprintf("%s.conf", domain))
-	return g.writeConfig(filename, sb.String())
+	return g.writeConfig(filename, buf.String())
 }
 
 // GenerateHTTPConfig generates Nginx HTTP server blocks for inbounds
@@ -256,38 +223,20 @@ func (g *ConfigGenerator) GenerateHTTPConfig(inbounds []models.Inbound) error {
 }
 
 func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbound) string {
-	var sb strings.Builder
-
-	// HTTP to HTTPS redirect
-	sb.WriteString("server {\n")
-	sb.WriteString("    listen 80;\n")
-	sb.WriteString("    listen [::]:80;\n")
-	sb.WriteString(fmt.Sprintf("    server_name %s;\n", domain))
-	sb.WriteString("    return 301 https://$host$request_uri;\n")
-	sb.WriteString("}\n\n")
-
-	// HTTPS server block
-	sb.WriteString("server {\n")
-	sb.WriteString("    listen 443 ssl http2;\n")
-	sb.WriteString("    listen [::]:443 ssl http2;\n")
-	sb.WriteString(fmt.Sprintf("    server_name %s;\n\n", domain))
-
-	// SSL Configuration
-	// Use the first inbound's domain cert (they should all use the same domain)
-	if len(inbounds) > 0 && inbounds[0].Domain != nil {
-		d := inbounds[0].Domain
-		sb.WriteString(fmt.Sprintf("    ssl_certificate %s;\n", d.CertPath))
-		sb.WriteString(fmt.Sprintf("    ssl_certificate_key %s;\n", d.KeyPath))
-		sb.WriteString("    ssl_protocols TLSv1.2 TLSv1.3;\n")
-		sb.WriteString("    ssl_ciphers HIGH:!aNULL:!MD5;\n")
-		sb.WriteString("    ssl_prefer_server_ciphers on;\n")
-		sb.WriteString("    ssl_session_cache shared:SSL:10m;\n")
-		sb.WriteString("    ssl_session_timeout 10m;\n\n")
+	data := inboundsTmplData{
+		Domain: domain,
 	}
 
-	// Proxy locations for each inbound
+	if len(inbounds) > 0 && inbounds[0].Domain != nil {
+		d := inbounds[0].Domain
+		data.HasCert = true
+		data.CertPath = d.CertPath
+		data.KeyPath = d.KeyPath
+	}
+
+	var locations []inboundLocationData
 	for _, i := range inbounds {
-		// Determine upstream address based on UDS mode
+		// Determine upstream address
 		var grpcUpstream, httpUpstream string
 		if i.UseUDS {
 			sockPath := i.SocketPath(g.socketDir)
@@ -298,63 +247,30 @@ func (g *ConfigGenerator) buildServerBlock(domain string, inbounds []models.Inbo
 			httpUpstream = fmt.Sprintf("http://127.0.0.1:%d", i.Port)
 		}
 
-		if i.IsGRPC() {
-			sb.WriteString(fmt.Sprintf("    # gRPC: %s", i.Tag))
-			if i.ActualDomain != "" {
-				sb.WriteString(fmt.Sprintf(" (subdomain: %s)", i.ActualDomain))
-			}
-			sb.WriteString("\n")
-			sb.WriteString(fmt.Sprintf("    location /%s {\n", i.ServiceName))
-			sb.WriteString("        if ($content_type !~ \"application/grpc\") {\n")
-			sb.WriteString("            return 404;\n")
-			sb.WriteString("        }\n")
-			sb.WriteString(fmt.Sprintf("        grpc_pass %s;\n", grpcUpstream))
-			sb.WriteString("        grpc_set_header Host $host;\n")
-			sb.WriteString("        grpc_set_header X-Real-IP $remote_addr;\n")
-			sb.WriteString("        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
-			sb.WriteString("    }\n\n")
-		} else if i.IsXHTTP() {
-			sb.WriteString(fmt.Sprintf("    # XHTTP: %s", i.Tag))
-			if i.ActualDomain != "" {
-				sb.WriteString(fmt.Sprintf(" (subdomain: %s)", i.ActualDomain))
-			}
-			sb.WriteString("\n")
-			sb.WriteString(fmt.Sprintf("    location %s {\n", i.Path))
-			sb.WriteString(fmt.Sprintf("        grpc_pass %s;\n", grpcUpstream))
-			sb.WriteString("        grpc_set_header Host $host;\n")
-			sb.WriteString("        grpc_set_header X-Real-IP $remote_addr;\n")
-			sb.WriteString("        grpc_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
-			sb.WriteString("        client_body_buffer_size 1m;\n")
-			sb.WriteString("        client_max_body_size 0;\n")
-			sb.WriteString("        grpc_read_timeout 1h;\n")
-			sb.WriteString("        grpc_send_timeout 1h;\n")
-			sb.WriteString("    }\n\n")
-		} else if i.Transport == models.TransportWS {
-			sb.WriteString(fmt.Sprintf("    # WebSocket: %s", i.Tag))
-			if i.ActualDomain != "" {
-				sb.WriteString(fmt.Sprintf(" (subdomain: %s)", i.ActualDomain))
-			}
-			sb.WriteString("\n")
-			sb.WriteString(fmt.Sprintf("    location %s {\n", i.Path))
-			sb.WriteString("        proxy_redirect off;\n")
-			sb.WriteString(fmt.Sprintf("        proxy_pass %s;\n", httpUpstream))
-			sb.WriteString("        proxy_http_version 1.1;\n")
-			sb.WriteString("        proxy_set_header Upgrade $http_upgrade;\n")
-			sb.WriteString("        proxy_set_header Connection \"upgrade\";\n")
-			sb.WriteString("        proxy_set_header Host $host;\n")
-			sb.WriteString("        proxy_set_header X-Real-IP $remote_addr;\n")
-			sb.WriteString("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
-			sb.WriteString("    }\n\n")
+		loc := inboundLocationData{
+			Tag:          i.Tag,
+			ActualDomain: i.ActualDomain,
+			IsGRPC:       i.IsGRPC(),
+			IsXHTTP:      i.IsXHTTP(),
+			IsWS:         i.Transport == models.TransportWS,
+			ServiceName:  i.ServiceName,
+			Path:         i.Path,
 		}
+
+		if loc.IsGRPC {
+			loc.Upstream = grpcUpstream
+		} else if loc.IsXHTTP || loc.IsWS {
+			loc.Upstream = httpUpstream
+		}
+		locations = append(locations, loc)
+	}
+	data.Inbounds = locations
+
+	var buf bytes.Buffer
+	if err := inboundsConfigTmpl.Execute(&buf, data); err != nil {
+		// As this shouldn't fail locally, returning empty string implies it failed
+		return ""
 	}
 
-	// Default location
-	sb.WriteString("    location / {\n")
-	sb.WriteString("        root /var/www/html;\n")
-	sb.WriteString("        index index.html;\n")
-	sb.WriteString("        try_files $uri $uri/ =404;\n")
-	sb.WriteString("    }\n")
-	sb.WriteString("}\n")
-
-	return sb.String()
+	return buf.String()
 }

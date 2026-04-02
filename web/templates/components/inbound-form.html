@@ -16,7 +16,16 @@
     </div>
 
     <div class="form-group">
-        <label for="port">端口</label>
+        <label for="use_uds">Unix Domain Socket (UDS)</label>
+        <select id="use_uds" name="use_uds" required onchange="toggleUDSFields(this.value)">
+            <option value="true" {{if or (not .Inbound) .Inbound.UseUDS}}selected{{end}}>⚡ 启用 (更高性能, 无需本地端口)</option>
+            <option value="false" {{if and .Inbound (not .Inbound.UseUDS)}}selected{{end}}>🌐 禁用 (使用 TCP 端口)</option>
+        </select>
+        <small class="form-hint">直接通过内存套接字进行 Nginx 反代，极大降低 TCP 开销</small>
+    </div>
+
+    <div class="form-group" id="port-fields" style="display: {{if or (not .Inbound) .Inbound.UseUDS}}none{{else}}block{{end}};">
+        <label for="port">TCP 端口</label>
         <div class="input-with-button">
             <input type="number" id="port" name="port" value="{{if .Inbound}}{{.Inbound.Port}}{{end}}"
                 min="1024" max="65535" placeholder="留空自动生成">
@@ -111,6 +120,15 @@
         } else {
             wsXhttpFields.style.display = 'block';
             grpcFields.style.display = 'none';
+        }
+    }
+
+    function toggleUDSFields(useUDS) {
+        const portFields = document.getElementById('port-fields');
+        if (useUDS === 'true') {
+            portFields.style.display = 'none';
+        } else {
+            portFields.style.display = 'block';
         }
     }
 

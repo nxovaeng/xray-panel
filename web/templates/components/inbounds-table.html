@@ -15,7 +15,13 @@
         <tr id="inbound-{{.ID}}">
             <td><code style="color: var(--accent); border-color: rgba(99, 102, 241, 0.2);">{{.Tag}}</code></td>
             <td><span class="badge badge-info">{{.Protocol}}</span></td>
-            <td>{{.Port}}</td>
+            <td>
+                {{if .UseUDS}}
+                    <span class="badge badge-success" title="Unix Domain Socket: xray-{{.Tag}}.sock"><i data-lucide="zap" style="width: 12px; height: 12px; margin-right: 2px;"></i> UDS</span>
+                {{else}}
+                    {{.Port}}
+                {{end}}
+            </td>
             <td>{{.Transport}}</td>
             <td>
                 {{if .Domain}}
