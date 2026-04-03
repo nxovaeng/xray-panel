@@ -1,4 +1,4 @@
-{{define "components/dashboard-stats.html"}}
+﻿{{define "components/dashboard-stats.html"}}
 <!-- 用户统计 -->
 <div class="stat-card">
     <div class="stat-icon">
@@ -92,6 +92,6 @@
 </div>
 
 <script>
-    lucide.createIcons();
+    if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }
 </script>
 {{end}}

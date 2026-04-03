@@ -1,4 +1,4 @@
-{{define "components/users-table.html"}}
+﻿{{define "components/users-table.html"}}
 <table class="data-table">
     <thead>
         <tr>
@@ -187,11 +187,11 @@
 </table>
 
 <!-- QR Code Library -->
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="/static/js/qrcode.min.js"></script>
 
 <script>
     // Re-initialize icons for dynamic content
-    lucide.createIcons();
+    if (window.lucide) lucide.createIcons({ nameAttr: 'data-lucide', attrs: {}, nodes: [document.querySelector('table')] });
 
     // Store QR code instances
     const qrCodes = {};
@@ -227,7 +227,7 @@
             }
             
             // Re-initialize icons
-            lucide.createIcons();
+            if (window.lucide) lucide.createIcons({ nameAttr: 'data-lucide', attrs: {}, nodes: [detailsRow] });
         }
     }
 
@@ -277,7 +277,7 @@
                     textPre.textContent = text;
                 }
                 // Re-initialize icons
-                lucide.createIcons();
+                if (window.lucide) lucide.createIcons({ nameAttr: 'data-lucide', attrs: {}, nodes: [document.getElementById('plain-content-' + userId)] });
             })
             .catch(error => {
                 textPre.textContent = '加载失败: ' + error.message;

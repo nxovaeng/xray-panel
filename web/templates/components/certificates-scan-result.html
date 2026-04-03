@@ -1,4 +1,4 @@
-{{define "components/certificates-scan-result.html"}}
+﻿{{define "components/certificates-scan-result.html"}}
 <div class="scan-results">
     {{if .certificates}}
     <div style="margin-bottom: 1rem; padding: 1rem; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border: 1px solid rgba(34, 197, 94, 0.3);">
@@ -117,5 +117,5 @@
     </div>
     {{end}}
 </div>
-<script>lucide.createIcons();</script>
+<script>if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }</script>
 {{end}}

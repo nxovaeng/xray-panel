@@ -1,4 +1,4 @@
-{{define "settings"}}
+﻿{{define "settings"}}
 <!DOCTYPE html>
 <html lang="zh-CN">
 
@@ -7,9 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>应用配置 - Xray 面板</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="/static/js/htmx.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+        <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/lucide.min.js"></script>
 </head>
 
 <body>
@@ -101,7 +100,7 @@
     <div id="notification-container"></div>
     <script src="/static/js/app.min.js"></script>
     <script>
-        lucide.createIcons();
+        if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
 
         // Check status on load (public API, no auth required)
         fetch('/api/xray/status')
@@ -131,7 +130,7 @@
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 保存中...';
             btn.disabled = true;
-            lucide.createIcons();
+            if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
 
             fetch('/api/settings', {
                 method: 'PUT',
@@ -158,7 +157,7 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    lucide.createIcons();
+                    if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
                 });
         }
 
@@ -167,7 +166,7 @@
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 重启中...';
             btn.disabled = true;
-            lucide.createIcons();
+            if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
 
             fetch('/api/xray/restart', {
                 method: 'POST',
@@ -185,7 +184,7 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    lucide.createIcons();
+                    if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
                 });
         }
 
@@ -194,7 +193,7 @@
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 应用中...';
             btn.disabled = true;
-            lucide.createIcons();
+            if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
 
             fetch('/api/xray/apply', {
                 method: 'POST',
@@ -212,7 +211,7 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    lucide.createIcons();
+                    if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
                 });
         }
 

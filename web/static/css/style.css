@@ -884,3 +884,67 @@ td code {
         padding-top: 4rem;
     }
 }
+
+/* ===== Performance optimizations ===== */
+
+/* Reduce backdrop-filter scope — only apply where truly needed */
+.sidebar {
+    /* backdrop-filter is expensive; use solid bg on low-end devices */
+    background: rgba(20, 30, 48, 0.97);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .sidebar {
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }
+}
+
+/* Promote animated elements to their own compositor layer */
+.modal-content {
+    will-change: transform;
+}
+
+.stat-card {
+    will-change: transform;
+}
+
+/* Reduce animation on stat cards to avoid layout thrash */
+.stat-card:hover {
+    transform: translateY(-2px); /* reduced from -4px */
+}
+
+/* content-page animation: use opacity only, skip transform for large DOM */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.content-page {
+    animation: fadeIn 0.2s ease-out; /* was slideUp 0.4s */
+}
+
+/* Table rows: avoid hover repaint on large tables */
+tr:hover td {
+    background: transparent; /* remove hover bg on table rows */
+}
+
+/* Notification: use transform3d for GPU compositing */
+.notification {
+    transform: translateX(100%);
+    opacity: 0;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+/* HTMX request indicator */
+.htmx-request .htmx-indicator { display: inline-flex; }
+.htmx-indicator { display: none; }
+
+/* Reduce glass effect on bg-card for performance */
+.table-container,
+.stat-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--bg-secondary);
+    border: 1px solid var(--glass-border);
+}

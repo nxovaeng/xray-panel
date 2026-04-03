@@ -1,4 +1,4 @@
-{{define "components/outbounds-table.html"}}
+﻿{{define "components/outbounds-table.html"}}
 <table class="data-table">
     <thead>
         <tr>
@@ -61,7 +61,7 @@
     </tbody>
 </table>
 <script>
-lucide.createIcons();
+if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }
 
 // Test outbound connection from list
 function testOutboundFromList(outboundId) {
@@ -72,7 +72,7 @@ function testOutboundFromList(outboundId) {
     // Show loading state
     testBtn.innerHTML = '<i data-lucide="loader" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i>';
     testBtn.disabled = true;
-    lucide.createIcons();
+    if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }
     
     fetch('/api/outbounds/' + outboundId + '/test', {
         method: 'POST',
@@ -98,28 +98,28 @@ function testOutboundFromList(outboundId) {
             testBtn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
             showNotification('连接失败: ' + data.message, 'error');
         }
-        lucide.createIcons();
+        if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }
         
         // Reset button after 3 seconds
         setTimeout(() => {
             testBtn.innerHTML = originalContent;
             testBtn.style.color = 'var(--success)';
             testBtn.style.borderColor = 'rgba(34, 197, 94, 0.3)';
-            lucide.createIcons();
+            if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }
         }, 3000);
     })
     .catch(error => {
         testBtn.disabled = false;
         testBtn.innerHTML = '<i data-lucide="x" style="width: 16px; height: 16px;"></i>';
         testBtn.style.color = 'var(--danger)';
-        lucide.createIcons();
+        if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }
         showNotification('测试失败: ' + error.message, 'error');
         
         setTimeout(() => {
             testBtn.innerHTML = originalContent;
             testBtn.style.color = 'var(--success)';
             testBtn.style.borderColor = 'rgba(34, 197, 94, 0.3)';
-            lucide.createIcons();
+            if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }
         }, 3000);
     });
 }

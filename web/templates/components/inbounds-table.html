@@ -1,4 +1,4 @@
-{{define "components/inbounds-table.html"}}
+﻿{{define "components/inbounds-table.html"}}
 <table class="data-table">
     <thead>
         <tr>
@@ -70,5 +70,5 @@
         {{end}}
     </tbody>
 </table>
-<script>lucide.createIcons();</script>
+<script>if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("table,div,tbody") || document.body : document.body]}); }</script>
 {{end}}
