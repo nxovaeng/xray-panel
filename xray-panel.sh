@@ -104,6 +104,8 @@ show_menu() {
     echo -e "${GREEN}16.${PLAIN} 重启 Xray"
     echo -e "${GREEN}17.${PLAIN} 查看 Xray 状态"
     echo -e "${GREEN}18.${PLAIN} 查看 Xray 日志"
+    echo -e "${GREEN}23.${PLAIN} 更新 Xray-core"
+    echo -e "${GREEN}24.${PLAIN} 申请 WARP WireGuard 配置"
     echo " ————————————————"
     echo -e "${GREEN}19.${PLAIN} 配置 Nginx 反向代理"
     echo " ————————————————"
@@ -112,7 +114,7 @@ show_menu() {
     echo -e "${GREEN}22.${PLAIN} 清理日志"
     echo " ————————————————"
     echo ""
-    read -p "请输入选择 [0-22]: " choice
+    read -p "请输入选择 [0-24]: " choice
     echo ""
 }
 
@@ -301,6 +303,178 @@ logs_xray() {
     journalctl -u xray -f
 }
 
+# 23. 更新 Xray-core
+update_xray() {
+    echo -e "${BLUE}[INFO]${PLAIN} 更新 Xray-core..."
+
+    # 获取当前版本
+    if command -v xray &> /dev/null; then
+        current=$(xray version 2>/dev/null | head -1 | grep -oP 'Xray \K[\d.]+' || echo "未知")
+        echo -e "当前版本: ${YELLOW}${current}${PLAIN}"
+    fi
+
+    # 获取最新版本
+    latest=$(curl -s "https://api.github.com/repos/XTLS/Xray-core/releases/latest" \
+        | grep -oP '"tag_name": "\K[^"]+' || echo "")
+
+    if [[ -z "$latest" ]]; then
+        echo -e "${RED}[ERROR]${PLAIN} 获取最新版本失败，请检查网络"
+        return
+    fi
+
+    echo -e "最新版本: ${GREEN}${latest}${PLAIN}"
+
+    if [[ "$current" == "${latest#v}" ]]; then
+        echo -e "${GREEN}[INFO]${PLAIN} 已是最新版本，无需更新"
+        return
+    fi
+
+    read -p "确认更新到 ${latest}? (y/n): " -r
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        return
+    fi
+
+    echo -e "${BLUE}[INFO]${PLAIN} 使用官方安装脚本更新..."
+    # 官方安装脚本支持 --version 参数指定版本，不传则安装最新
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+
+    if [[ $? -eq 0 ]]; then
+        new_ver=$(xray version 2>/dev/null | head -1 | grep -oP 'Xray \K[\d.]+' || echo "未知")
+        echo -e "${GREEN}[SUCCESS]${PLAIN} Xray-core 已更新到 ${new_ver}"
+        echo -e "${YELLOW}[INFO]${PLAIN} 正在重启 Xray 服务..."
+        systemctl restart xray
+    else
+        echo -e "${RED}[ERROR]${PLAIN} 更新失败"
+    fi
+}
+
+# 24. 申请 WARP WireGuard 配置
+get_warp_config() {
+    echo -e "${BLUE}[INFO]${PLAIN} 申请 Cloudflare WARP WireGuard 配置"
+    echo ""
+
+    # 检查 wgcf 是否已安装
+    if ! command -v wgcf &> /dev/null; then
+        echo -e "${YELLOW}[INFO]${PLAIN} 未找到 wgcf，正在下载..."
+
+        ARCH=$(uname -m)
+        case $ARCH in
+            x86_64)  WGCF_ARCH="amd64" ;;
+            aarch64) WGCF_ARCH="arm64" ;;
+            armv7l)  WGCF_ARCH="armv7" ;;
+            *)
+                echo -e "${RED}[ERROR]${PLAIN} 不支持的架构: $ARCH"
+                return
+                ;;
+        esac
+
+        WGCF_VER=$(curl -s "https://api.github.com/repos/ViRb3/wgcf/releases/latest" \
+            | grep -oP '"tag_name": "\K[^"]+' || echo "v2.2.26")
+        WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/${WGCF_VER}/wgcf_${WGCF_VER#v}_linux_${WGCF_ARCH}"
+
+        if wget -q "$WGCF_URL" -O /usr/local/bin/wgcf; then
+            chmod +x /usr/local/bin/wgcf
+            echo -e "${GREEN}[SUCCESS]${PLAIN} wgcf 已安装"
+        else
+            echo -e "${RED}[ERROR]${PLAIN} wgcf 下载失败，请手动安装: https://github.com/ViRb3/wgcf/releases"
+            return
+        fi
+    fi
+
+    WARP_DIR="/opt/xray-panel/warp"
+    mkdir -p "$WARP_DIR"
+    cd "$WARP_DIR"
+
+    # 如果已有账户文件，询问是否重新注册
+    if [[ -f "wgcf-account.toml" ]]; then
+        echo -e "${YELLOW}[INFO]${PLAIN} 已存在 WARP 账户配置"
+        read -p "是否重新注册新账户? (y/n，默认 n): " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -f wgcf-account.toml wgcf-profile.conf
+        fi
+    fi
+
+    # 注册账户
+    if [[ ! -f "wgcf-account.toml" ]]; then
+        echo -e "${BLUE}[INFO]${PLAIN} 正在注册 WARP 账户..."
+        if ! wgcf register --accept-tos; then
+            echo -e "${RED}[ERROR]${PLAIN} 注册失败，请检查网络连接"
+            return
+        fi
+        echo -e "${GREEN}[SUCCESS]${PLAIN} 账户注册成功"
+    fi
+
+    # 生成配置
+    echo -e "${BLUE}[INFO]${PLAIN} 正在生成 WireGuard 配置..."
+    if ! wgcf generate; then
+        echo -e "${RED}[ERROR]${PLAIN} 配置生成失败"
+        return
+    fi
+
+    # 解析配置文件
+    CONF="$WARP_DIR/wgcf-profile.conf"
+    if [[ ! -f "$CONF" ]]; then
+        echo -e "${RED}[ERROR]${PLAIN} 配置文件未生成"
+        return
+    fi
+
+    PRIVATE_KEY=$(grep "PrivateKey" "$CONF" | awk '{print $3}')
+    ADDRESS=$(grep "Address" "$CONF" | awk '{print $3}')
+    PEER_PUBKEY=$(grep "PublicKey" "$CONF" | awk '{print $3}')
+    ENDPOINT=$(grep "Endpoint" "$CONF" | awk '{print $3}')
+    MTU=$(grep "MTU" "$CONF" | awk '{print $3}')
+
+    # 分离 endpoint 的 host 和 port
+    ENDPOINT_HOST="${ENDPOINT%:*}"
+    ENDPOINT_PORT="${ENDPOINT##*:}"
+
+    # 分离 IPv4 和 IPv6 地址
+    IPV4_ADDR=$(echo "$ADDRESS" | tr ',' '\n' | grep -v ':' | tr -d ' ')
+    IPV6_ADDR=$(echo "$ADDRESS" | tr ',' '\n' | grep ':' | tr -d ' ')
+
+    echo ""
+    echo -e "${GREEN}========================================${PLAIN}"
+    echo -e "${GREEN}  WARP WireGuard 配置信息${PLAIN}"
+    echo -e "${GREEN}========================================${PLAIN}"
+    echo ""
+    echo -e "${CYAN}配置文件路径:${PLAIN} $CONF"
+    echo ""
+    echo -e "${YELLOW}--- 在面板出站配置中填写以下信息 ---${PLAIN}"
+    echo ""
+    echo -e "${CYAN}类型:${PLAIN}       WireGuard"
+    echo -e "${CYAN}服务器:${PLAIN}     ${ENDPOINT_HOST}"
+    echo -e "${CYAN}端口:${PLAIN}       ${ENDPOINT_PORT} (UDP)"
+    echo -e "${CYAN}私钥:${PLAIN}       ${PRIVATE_KEY}"
+    echo -e "${CYAN}对端公钥:${PLAIN}   ${PEER_PUBKEY}"
+    echo -e "${CYAN}本地 IPv4:${PLAIN}  ${IPV4_ADDR}"
+    echo -e "${CYAN}本地 IPv6:${PLAIN}  ${IPV6_ADDR}"
+    echo -e "${CYAN}MTU:${PLAIN}        ${MTU:-1280}"
+    echo ""
+    echo -e "${YELLOW}--- AllowedIPs (路由所有流量) ---${PLAIN}"
+    echo -e "  0.0.0.0/0, ::/0"
+    echo ""
+    echo -e "${YELLOW}提示:${PLAIN}"
+    echo -e "  · 此配置用于将出站流量通过 WARP 隧道发出，出口 IP 为 Cloudflare IP"
+    echo -e "  · 验证是否生效: curl -s https://www.cloudflare.com/cdn-cgi/trace | grep warp"
+    echo -e "  · 原始配置文件: ${CONF}"
+    echo ""
+    echo -e "${GREEN}========================================${PLAIN}"
+
+    # 保存摘要到文件
+    cat > "$WARP_DIR/warp-summary.txt" <<EOF
+WARP WireGuard 配置摘要
+生成时间: $(date '+%Y-%m-%d %H:%M:%S')
+
+服务器:   ${ENDPOINT_HOST}
+端口:     ${ENDPOINT_PORT}
+私钥:     ${PRIVATE_KEY}
+对端公钥: ${PEER_PUBKEY}
+本地IP:   ${IPV4_ADDR}, ${IPV6_ADDR}
+MTU:      ${MTU:-1280}
+EOF
+    echo -e "${CYAN}摘要已保存到:${PLAIN} $WARP_DIR/warp-summary.txt"
+}
+
 # 19. 配置 Nginx 反向代理
 configure_nginx() {
     check_installed
@@ -468,6 +642,8 @@ main() {
             20) backup_data ;;
             21) restore_data ;;
             22) clean_logs ;;
+            23) update_xray ;;
+            24) get_warp_config ;;
             *)
                 echo -e "${RED}无效的选择${PLAIN}"
                 ;;
