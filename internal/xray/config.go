@@ -322,12 +322,18 @@ func (g *Generator) getActiveUsers() []models.User {
 	return active
 }
 
-// splitCSV splits a comma-separated string into a slice
+// splitCSV splits a comma or newline-separated string into a slice
 func splitCSV(s string) []string {
 	if s == "" {
 		return nil
 	}
-	parts := strings.Split(s, ",")
+	
+	// Split by comma or newline
+	f := func(c rune) bool {
+		return c == ',' || c == '\n' || c == '\r'
+	}
+	parts := strings.FieldsFunc(s, f)
+	
 	result := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
