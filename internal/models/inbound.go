@@ -56,6 +56,9 @@ type Inbound struct {
 	// Wildcard certificate support
 	ActualDomain string `json:"actual_domain" form:"actual_domain"` // Generated subdomain for wildcard certs (e.g., abc123.example.com)
 
+	// 独立于面板管理的 SNI 域名（用于 Cloudflare Tunnel 场景，不生成 Nginx 配置）
+	CustomSNI string `json:"custom_sni" form:"custom_sni"`
+
 	// 连接目标域名（可选，用于 CDN 场景）
 	// 如果设置，客户端将连接到此域名，但 SNI 使用 ActualDomain
 	// 例如：SNI=abc.example.com, 连接目标=cdn.example.com 或 example.com

@@ -47,6 +47,18 @@
 
     <!-- WebSocket / XHTTP Fields -->
     <div id="ws-xhttp-fields" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "ws") (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
+        <!-- XHTTP specific Mode -->
+        <div class="form-group" id="xhttp-mode-field" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
+            <label for="mode">XHTTP 模式</label>
+            <select id="mode" name="mode">
+                <option value="auto" {{if or (not .Inbound) (eq .Inbound.Mode "auto") (eq .Inbound.Mode "")}}selected{{end}}>自动 (Auto)</option>
+                <option value="stream-up" {{if and .Inbound (eq .Inbound.Mode "stream-up")}}selected{{end}}>Stream-Up (推荐适用于 Nginx/Cloudflare)</option>
+                <option value="stream-one" {{if and .Inbound (eq .Inbound.Mode "stream-one")}}selected{{end}}>Stream-One</option>
+                <option value="packet-up" {{if and .Inbound (eq .Inbound.Mode "packet-up")}}selected{{end}}>Packet-Up</option>
+            </select>
+            <small class="form-hint">选择 XHTTP 数据流模式。若使用 Cloudflare Tunnel 或 Nginx 反代，推荐改成 Stream-Up 以减少高频握手并解决协议断流报错。</small>
+        </div>
+
         <div class="form-group">
             <label for="path">路径</label>
             <div class="input-with-button">
@@ -77,15 +89,21 @@
 
     <div class="form-group">
         <label for="domain_id">SNI 域名</label>
-        <select id="domain_id" name="domain_id">
-            <option value="">无</option>
+        <select id="domain_id" name="domain_id" onchange="toggleDomainFields(this.value)">
+            <option value="">无 (免 Nginx 配置 / 纯隧道模式)</option>
             {{range .Domains}}
             <option value="{{.ID}}" {{if and $.Inbound (eq $.Inbound.DomainID .ID)}}selected{{end}}>
                 {{.Domain}}
             </option>
             {{end}}
         </select>
-        <small class="form-hint">关联域名（用于 SNI 和 Nginx 证书）</small>
+        <small class="form-hint">关联面板管理的域名（用于生成 Nginx 证书配置）</small>
+    </div>
+
+    <div class="form-group" id="custom-sni-field" style="display: {{if or (not .Inbound) (eq .Inbound.DomainID "")}}block{{else}}none{{end}};">
+        <label for="custom_sni">自定义 SNI (隧道模式核心)</label>
+        <input type="text" id="custom_sni" name="custom_sni" value="{{if .Inbound}}{{.Inbound.CustomSNI}}{{end}}" placeholder="如搭配 CF Tunnel 请填入其实际绑定域名">
+        <small class="form-hint">选择【无】关联域名时，面板将<strong style="color:red;">拒绝生成</strong>相应的 Nginx 配置。此时生成的订阅中，将采用此自定义 SNI。</small>
     </div>
 
     <div class="form-group">
@@ -113,13 +131,18 @@
     function toggleTransportFields(transport) {
         const wsXhttpFields = document.getElementById('ws-xhttp-fields');
         const grpcFields = document.getElementById('grpc-fields');
+        const xhttpModeField = document.getElementById('xhttp-mode-field');
         
         if (transport === 'grpc') {
             wsXhttpFields.style.display = 'none';
             grpcFields.style.display = 'block';
+            if (xhttpModeField) xhttpModeField.style.display = 'none';
         } else {
             wsXhttpFields.style.display = 'block';
             grpcFields.style.display = 'none';
+            if (xhttpModeField) {
+                xhttpModeField.style.display = transport === 'xhttp' ? 'block' : 'none';
+            }
         }
     }
 
@@ -129,6 +152,13 @@
             portFields.style.display = 'none';
         } else {
             portFields.style.display = 'block';
+        }
+    }
+
+    function toggleDomainFields(domainId) {
+        const customSniField = document.getElementById('custom-sni-field');
+        if (customSniField) {
+            customSniField.style.display = domainId === '' ? 'block' : 'none';
         }
     }
 

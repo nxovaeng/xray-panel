@@ -25,6 +25,7 @@ type CreateInboundRequest struct {
 	Mode          string           `json:"mode"`
 	Remark        string           `json:"remark"`
 	ConnectDomain string           `json:"connect_domain"` // 连接目标域名（CDN域名或父域名）
+	CustomSNI     string           `json:"custom_sni"`     // 手动填写的 SNI（免 Nginx 配置）
 	RandomPort    bool             `json:"random_port"`    // 是否生成随机端口
 	RandomPath    bool             `json:"random_path"`    // 是否生成随机路径
 	UseUDS        *bool            `json:"use_uds"`        // 使用 Unix Domain Socket（默认 true）
@@ -96,6 +97,7 @@ func (s *Server) handleCreateInbound(c *gin.Context) {
 		Mode:          req.Mode,
 		Remark:        req.Remark,
 		ConnectDomain: req.ConnectDomain,
+		CustomSNI:     req.CustomSNI,
 		Enabled:       true,
 		UseUDS:        true, // 默认使用 UDS
 	}
@@ -179,6 +181,7 @@ func (s *Server) handleUpdateInbound(c *gin.Context) {
 	inbound.Mode = req.Mode
 	inbound.Remark = req.Remark
 	inbound.ConnectDomain = req.ConnectDomain
+	inbound.CustomSNI = req.CustomSNI
 
 	// 更新 UDS 设置
 	if req.UseUDS != nil {

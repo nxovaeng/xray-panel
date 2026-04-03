@@ -136,16 +136,16 @@ func (s *Server) handleSubscription(c *gin.Context) {
 
 // generateVLESSLink generates a VLESS share link for a specific inbound
 func generateVLESSLink(user models.User, inbound models.Inbound) string {
-	if inbound.Domain == nil {
+	sniDomain := ""
+	if inbound.Domain != nil {
+		sniDomain = inbound.Domain.Domain
+		if inbound.ActualDomain != "" {
+			sniDomain = inbound.ActualDomain
+		}
+	} else if inbound.CustomSNI != "" {
+		sniDomain = inbound.CustomSNI
+	} else {
 		return ""
-	}
-
-	// SNI 域名：使用 ActualDomain（如果存在），否则使用 Domain.Domain
-	// ActualDomain 是为通配符证书生成的实际子域名（如 abc123.example.com）
-	// Domain.Domain 可能是通配符（如 *.example.com）或普通域名
-	sniDomain := inbound.Domain.Domain
-	if inbound.ActualDomain != "" {
-		sniDomain = inbound.ActualDomain
 	}
 
 	// 连接目标域名：如果设置了 ConnectDomain 则使用它，否则使用 sniDomain
@@ -224,14 +224,16 @@ func generateClashConfig(user models.User, inbounds []models.Inbound) string {
 	sb.WriteString("proxies:\n")
 
 	for _, inbound := range inbounds {
-		if inbound.Domain == nil {
+		sniDomain := ""
+		if inbound.Domain != nil {
+			sniDomain = inbound.Domain.Domain
+			if inbound.ActualDomain != "" {
+				sniDomain = inbound.ActualDomain
+			}
+		} else if inbound.CustomSNI != "" {
+			sniDomain = inbound.CustomSNI
+		} else {
 			continue
-		}
-
-		// SNI 域名：使用 ActualDomain（如果存在），否则使用 Domain.Domain
-		sniDomain := inbound.Domain.Domain
-		if inbound.ActualDomain != "" {
-			sniDomain = inbound.ActualDomain
 		}
 
 		// 连接目标域名：如果设置了 ConnectDomain 则使用它，否则使用 sniDomain
