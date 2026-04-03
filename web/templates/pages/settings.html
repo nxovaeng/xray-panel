@@ -36,6 +36,27 @@
             <div class="settings-grid"
                 style="display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">
 
+                <!-- Panel Settings -->
+                <div class="table-container" style="padding: 2rem;">
+                    <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i data-lucide="settings"></i> 面板配置
+                    </h2>
+
+                    <div class="form-group">
+                        <label>面板模式</label>
+                        <select id="panel-mode" class="form-control" style="max-width: 200px;">
+                            <option value="server" {{if eq .PanelMode "server" }}selected{{end}}>Server (服务端)</option>
+                            <option value="client" {{if eq .PanelMode "client" }}selected{{end}}>Client (客户端)</option>
+                        </select>
+                        <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
+                            切换模式后需要保存并应用配置才能完整生效。</p>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="savePanelMode()" id="btn-save-mode">
+                        <i data-lucide="save"></i> 保存面板配置
+                    </button>
+                </div>
+
                 <!-- Service Control -->
                 <div class="table-container" style="padding: 2rem;">
                     <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
@@ -58,24 +79,6 @@
                     </div>
                 </div>
 
-                <!-- System Info (Placeholder) -->
-                <div class="table-container" style="padding: 2rem;">
-                    <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <i data-lucide="info"></i> 系统信息
-                    </h2>
-
-                    <div class="form-group">
-                        <label>面板版本</label>
-                        <div style="padding: 0.5rem 0; color: var(--text-primary);">v1.0.0</div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>当前时间</label>
-                        <div id="server-time" style="padding: 0.5rem 0; color: var(--text-primary);">
-                            {{ .Time }}
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <!-- Config Preview -->
@@ -121,6 +124,43 @@
                 el.innerText = "检测失败";
                 el.style.color = "var(--warning)";
             });
+
+        function savePanelMode() {
+            const btn = document.getElementById('btn-save-mode');
+            const mode = document.getElementById('panel-mode').value;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 保存中...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            fetch('/api/settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    panel_mode: mode
+                }),
+                credentials: 'same-origin'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('success', '模式已保存，正在刷新...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    } else {
+                        showNotification('error', '保存失败: ' + data.error);
+                    }
+                })
+                .catch(err => showNotification('error', '请求失败'))
+                .finally(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    lucide.createIcons();
+                });
+        }
 
         function restartXray() {
             const btn = document.getElementById('btn-restart-xray');

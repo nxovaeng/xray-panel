@@ -35,3 +35,15 @@ func DefaultSettings() []Setting {
 		{Key: "default_expire_days", Value: "30", Type: "int", Remark: "Default expiry days for new users"},
 	}
 }
+
+// GetPanelMode returns the current panel mode ("server" or "client")
+func GetPanelMode(db *gorm.DB) string {
+	var setting Setting
+	if err := db.First(&setting, "key = ?", "panel_mode").Error; err != nil {
+		return "server" // Default to server if not found
+	}
+	if setting.Value == "client" {
+		return "client"
+	}
+	return "server"
+}

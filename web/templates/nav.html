@@ -5,11 +5,19 @@
     </div>
     <ul class="nav-menu">
         <li><a href="/dashboard" class="{{if eq .Page "dashboard"}}active{{end}}">📊 仪表盘</a></li>
+        
+        {{if eq .PanelMode "server"}}
         <li><a href="/users" class="{{if eq .Page "users"}}active{{end}}">👥 用户管理</a></li>
         <li><a href="/inbounds" class="{{if eq .Page "inbounds"}}active{{end}}">📥 入站配置</a></li>
+        {{end}}
+
         <li><a href="/outbounds" class="{{if eq .Page "outbounds"}}active{{end}}">📤 出站配置</a></li>
         <li><a href="/routing" class="{{if eq .Page "routing"}}active{{end}}">🔀 路由规则</a></li>
+        
+        {{if eq .PanelMode "server"}}
         <li><a href="/domains" class="{{if eq .Page "domains"}}active{{end}}">🌐 域名管理</a></li>
+        {{end}}
+        
         <li><a href="/settings" class="{{if eq .Page "settings"}}active{{end}}">🔄 应用配置</a></li>
     </ul>
     <div class="sidebar-footer">

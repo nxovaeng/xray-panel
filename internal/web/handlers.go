@@ -36,94 +36,67 @@ func (h *Handler) LoginPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "login.html", nil)
 }
 
-func (h *Handler) DashboardPage(c *gin.Context) {
+func (h *Handler) renderPage(c *gin.Context, template string, data gin.H) {
 	user, exists := c.Get("user")
 	if !exists {
 		user = nil
 	}
 
-	c.HTML(http.StatusOK, "dashboard", gin.H{
+	if data == nil {
+		data = gin.H{}
+	}
+	data["User"] = user
+	data["PanelMode"] = models.GetPanelMode(h.db)
+
+	c.HTML(http.StatusOK, template, data)
+}
+
+func (h *Handler) DashboardPage(c *gin.Context) {
+	h.renderPage(c, "dashboard", gin.H{
 		"Title": "Dashboard",
 		"Page":  "dashboard",
-		"User":  user,
 	})
 }
 
 func (h *Handler) UsersPage(c *gin.Context) {
-	user, exists := c.Get("user")
-	if !exists {
-		user = nil
-	}
-
-	c.HTML(http.StatusOK, "users", gin.H{
+	h.renderPage(c, "users", gin.H{
 		"Title": "Users",
 		"Page":  "users",
-		"User":  user,
 	})
 }
 
 func (h *Handler) InboundsPage(c *gin.Context) {
-	user, exists := c.Get("user")
-	if !exists {
-		user = nil
-	}
-
-	c.HTML(http.StatusOK, "inbounds", gin.H{
+	h.renderPage(c, "inbounds", gin.H{
 		"Title": "Inbounds",
 		"Page":  "inbounds",
-		"User":  user,
 	})
 }
 
 func (h *Handler) OutboundsPage(c *gin.Context) {
-	user, exists := c.Get("user")
-	if !exists {
-		user = nil
-	}
-
-	c.HTML(http.StatusOK, "outbounds", gin.H{
+	h.renderPage(c, "outbounds", gin.H{
 		"Title": "Outbounds",
 		"Page":  "outbounds",
-		"User":  user,
 	})
 }
 
 func (h *Handler) RoutingPage(c *gin.Context) {
-	user, exists := c.Get("user")
-	if !exists {
-		user = nil
-	}
-
-	c.HTML(http.StatusOK, "routing", gin.H{
+	h.renderPage(c, "routing", gin.H{
 		"Title": "Routing",
 		"Page":  "routing",
-		"User":  user,
 	})
 }
 
 func (h *Handler) DomainsPage(c *gin.Context) {
-	user, exists := c.Get("user")
-	if !exists {
-		user = nil
-	}
-
-	c.HTML(http.StatusOK, "domains", gin.H{
+	h.renderPage(c, "domains", gin.H{
 		"Title": "Domains",
 		"Page":  "domains",
-		"User":  user,
 	})
 }
 
 func (h *Handler) SettingsPage(c *gin.Context) {
-	user, exists := c.Get("user")
-	if !exists {
-		user = nil
-	}
-
-	c.HTML(http.StatusOK, "settings", gin.H{
+	h.renderPage(c, "settings", gin.H{
 		"Title": "Settings",
 		"Page":  "settings",
-		"User":  user,
 		"Time":  time.Now().Format("2006-01-02 15:04:05"),
 	})
 }
