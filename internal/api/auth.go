@@ -39,6 +39,12 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
+	// Rate limiting
+	if !loginLimiter.allow(c.ClientIP()) {
+		jsonError(c, http.StatusTooManyRequests, "Too many login attempts, try again later")
+		return
+	}
+
 	// Find admin by username
 	var admin models.Admin
 	if err := s.db.Where("username = ?", req.Username).First(&admin).Error; err != nil {
@@ -142,7 +148,8 @@ func (s *Server) webAuthMiddleware() gin.HandlerFunc {
 
 		if err != nil || !token.Valid {
 			// Clear invalid cookie and redirect to login
-			c.SetCookie("session_token", "", -1, "/", "", false, true)
+			isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+			c.SetCookie("session_token", "", -1, "/", "", isSecure, true)
 			c.Redirect(http.StatusFound, "/login")
 			c.Abort()
 			return
@@ -163,6 +170,16 @@ func (s *Server) handleWebLogin(c *gin.Context) {
 	if username == "" || password == "" {
 		c.HTML(http.StatusBadRequest, "login.html", gin.H{
 			"Error": "用户名和密码不能为空",
+		})
+		return
+	}
+
+	// Rate limiting
+	ip := c.ClientIP()
+	if !loginLimiter.allow(ip) {
+		logger.Warn("Login rate limit exceeded for IP: %s", ip)
+		c.HTML(http.StatusTooManyRequests, "login.html", gin.H{
+			"Error": "登录尝试过于频繁，请 5 分钟后再试",
 		})
 		return
 	}
@@ -208,14 +225,16 @@ func (s *Server) handleWebLogin(c *gin.Context) {
 	}
 
 	// Set session cookie
+	// secure flag: true when behind HTTPS (detected via X-Forwarded-Proto or TLS)
+	isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
 	c.SetCookie(
 		"session_token",
 		tokenString,
-		int(s.config.JWT.ExpireHour)*3600, // seconds
+		int(s.config.JWT.ExpireHour)*3600,
 		"/",
 		"",
-		false, // secure (set to true in production with HTTPS)
-		true,  // httpOnly
+		isSecure,
+		true, // httpOnly
 	)
 
 	logger.Info("Admin logged in: %s", username)
@@ -225,30 +244,30 @@ func (s *Server) handleWebLogin(c *gin.Context) {
 
 // handleWebLogout handles web-based logout
 func (s *Server) handleWebLogout(c *gin.Context) {
-	// Get username for logging if available
 	if username, exists := c.Get("username"); exists {
 		logger.Info("Admin logged out: %s", username)
 	}
-	
-	// Clear session cookie
-	c.SetCookie("session_token", "", -1, "/", "", false, true)
+	isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+	c.SetCookie("session_token", "", -1, "/", "", isSecure, true)
 	c.Redirect(http.StatusFound, "/login")
 }
 
 // handleLogout handles API logout (clears cookie and returns JSON)
 func (s *Server) handleLogout(c *gin.Context) {
-	// Get username for logging if available
 	if username, exists := c.Get("username"); exists {
 		logger.Info("Admin logged out via API: %s", username)
 	}
-
-	// Clear session cookie
-	c.SetCookie("session_token", "", -1, "/", "", false, true)
+	isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+	c.SetCookie("session_token", "", -1, "/", "", isSecure, true)
 	jsonOK(c, gin.H{"message": "Logged out successfully"})
 }
 
 // getAdminID returns the current admin ID from context
 func getAdminID(c *gin.Context) string {
-	adminID, _ := c.Get("admin_id")
-	return adminID.(string)
+	adminID, exists := c.Get("admin_id")
+	if !exists {
+		return ""
+	}
+	id, _ := adminID.(string)
+	return id
 }

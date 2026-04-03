@@ -1,5 +1,9 @@
 {{define "components/inbound-form.html"}}
-<form hx-post="/api/inbounds{{if .Inbound}}/{{.Inbound.ID}}{{end}}" hx-target="#inbounds-table" hx-swap="innerHTML" id="inbound-form">
+<form hx-post="/api/inbounds{{if .Inbound}}/{{.Inbound.ID}}{{end}}"
+      hx-target="#inbounds-table"
+      hx-swap="innerHTML"
+      hx-on::after-request="if(event.detail.successful){ closeModal(); showNotification('入站已保存', 'success'); } else { showNotification('保存失败: ' + event.detail.xhr.responseText, 'error'); }"
+      id="inbound-form">
 
     <div class="form-group">
         <label for="tag">标签</label>
@@ -8,115 +12,200 @@
 
     <div class="form-group">
         <label for="protocol">协议</label>
-        <select id="protocol" name="protocol" required>
-            <option value="vless" {{if and .Inbound (eq .Inbound.Protocol "vless")}}selected{{end}}>VLESS</option>
+        <select id="protocol" name="protocol" required onchange="toggleProtocolFields(this.value)">
+            <option value="vless" {{if or (not .Inbound) (eq .Inbound.Protocol "vless")}}selected{{end}}>VLESS</option>
             <option value="trojan" {{if and .Inbound (eq .Inbound.Protocol "trojan")}}selected{{end}}>Trojan</option>
+            <option value="wireguard" {{if and .Inbound (eq .Inbound.Protocol "wireguard")}}selected{{end}}>WireGuard (中转入站)</option>
         </select>
-        <small class="form-hint">入站协议类型</small>
+        <small class="form-hint">WireGuard 用于接收另一个 xray-panel 节点转发的出站流量，不会出现在用户订阅中。</small>
     </div>
 
-    <div class="form-group">
-        <label for="use_uds">Unix Domain Socket (UDS)</label>
-        <select id="use_uds" name="use_uds" required onchange="toggleUDSFields(this.value)">
-            <option value="true" {{if or (not .Inbound) .Inbound.UseUDS}}selected{{end}}>⚡ 启用 (更高性能, 无需本地端口)</option>
-            <option value="false" {{if and .Inbound (not .Inbound.UseUDS)}}selected{{end}}>🌐 禁用 (使用 TCP 端口)</option>
-        </select>
-        <small class="form-hint">直接通过内存套接字进行 Nginx 反代，极大降低 TCP 开销</small>
-    </div>
+    <!-- ===== 普通协议字段 (VLESS / Trojan) ===== -->
+    <div id="proxy-fields" style="display: {{if and .Inbound (eq .Inbound.Protocol "wireguard")}}none{{else}}block{{end}};">
 
-    <div class="form-group" id="port-fields" style="display: {{if or (not .Inbound) .Inbound.UseUDS}}none{{else}}block{{end}};">
-        <label for="port">TCP 端口</label>
-        <div class="input-with-button">
-            <input type="number" id="port" name="port" value="{{if .Inbound}}{{.Inbound.Port}}{{end}}"
-                min="1024" max="65535" placeholder="留空自动生成">
-            <button type="button" class="btn btn-sm" onclick="generateRandomPort()">🎲 随机</button>
-        </div>
-        <input type="hidden" id="random_port" name="random_port" value="false">
-        <small class="form-hint">Xray 监听端口（留空或点击随机自动生成 10000-60000 之间的端口）</small>
-    </div>
-
-    <div class="form-group">
-        <label for="transport">传输协议</label>
-        <select id="transport" name="transport" required onchange="toggleTransportFields(this.value)">
-            <option value="xhttp" {{if and .Inbound (eq .Inbound.Transport "xhttp")}}selected{{end}}>XHTTP (推荐)</option>
-            <option value="grpc" {{if and .Inbound (eq .Inbound.Transport "grpc")}}selected{{end}}>gRPC</option>
-            <option value="ws" {{if and .Inbound (eq .Inbound.Transport "ws")}}selected{{end}}>WebSocket</option>
-        </select>
-        <small class="form-hint">传输层协议（均可被 Nginx 反代）</small>
-    </div>
-
-    <!-- WebSocket / XHTTP Fields -->
-    <div id="ws-xhttp-fields" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "ws") (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
-        <!-- XHTTP specific Mode -->
-        <div class="form-group" id="xhttp-mode-field" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
-            <label for="mode">XHTTP 模式</label>
-            <select id="mode" name="mode">
-                <option value="auto" {{if or (not .Inbound) (eq .Inbound.Mode "auto") (eq .Inbound.Mode "")}}selected{{end}}>自动 (Auto)</option>
-                <option value="stream-up" {{if and .Inbound (eq .Inbound.Mode "stream-up")}}selected{{end}}>Stream-Up (推荐适用于 Nginx/Cloudflare)</option>
-                <option value="stream-one" {{if and .Inbound (eq .Inbound.Mode "stream-one")}}selected{{end}}>Stream-One</option>
-                <option value="packet-up" {{if and .Inbound (eq .Inbound.Mode "packet-up")}}selected{{end}}>Packet-Up</option>
+        <div class="form-group">
+            <label for="use_uds">Unix Domain Socket (UDS)</label>
+            <select id="use_uds" name="use_uds" onchange="toggleUDSFields(this.value)">
+                <option value="true" {{if or (not .Inbound) .Inbound.UseUDS}}selected{{end}}>⚡ 启用 (更高性能, 无需本地端口)</option>
+                <option value="false" {{if and .Inbound (not .Inbound.UseUDS)}}selected{{end}}>🌐 禁用 (使用 TCP 端口)</option>
             </select>
-            <small class="form-hint">选择 XHTTP 数据流模式。若使用 Cloudflare Tunnel 或 Nginx 反代，推荐改成 Stream-Up 以减少高频握手并解决协议断流报错。</small>
+            <small class="form-hint">直接通过内存套接字进行 Nginx 反代，极大降低 TCP 开销</small>
         </div>
 
-        <div class="form-group">
-            <label for="path">路径</label>
+        <div class="form-group" id="port-fields" style="display: {{if and .Inbound (not .Inbound.UseUDS)}}block{{else}}none{{end}};">
+            <label for="port">TCP 端口</label>
             <div class="input-with-button">
-                <input type="text" id="path" name="path" value="{{if .Inbound}}{{.Inbound.Path}}{{end}}"
-                    placeholder="留空自动生成随机路径">
-                <button type="button" class="btn btn-sm" onclick="generateRandomPath()">🎲 随机</button>
+                <input type="number" id="port" name="port" value="{{if .Inbound}}{{.Inbound.Port}}{{end}}"
+                    min="1024" max="65535" placeholder="留空自动生成">
+                <button type="button" class="btn btn-sm" onclick="generateRandomPort()">🎲 随机</button>
             </div>
-            <input type="hidden" id="random_path" name="random_path" value="false">
-            <small class="form-hint">WebSocket/XHTTP 路径（留空或点击随机自动生成）</small>
+            <small class="form-hint">Xray 监听端口（留空或点击随机自动生成 10000-60000 之间的端口）</small>
         </div>
+
         <div class="form-group">
-            <label for="host">Host (可选)</label>
-            <input type="text" id="host" name="host" value="{{if .Inbound}}{{.Inbound.Host}}{{end}}"
-                placeholder="example.com">
-            <small class="form-hint">Host 头，通常留空</small>
+            <label for="transport">传输协议</label>
+            <select id="transport" name="transport" onchange="toggleTransportFields(this.value)">
+                <option value="xhttp" {{if or (not .Inbound) (eq .Inbound.Transport "xhttp")}}selected{{end}}>XHTTP (推荐)</option>
+                <option value="grpc" {{if and .Inbound (eq .Inbound.Transport "grpc")}}selected{{end}}>gRPC</option>
+                <option value="ws" {{if and .Inbound (eq .Inbound.Transport "ws")}}selected{{end}}>WebSocket</option>
+            </select>
+            <small class="form-hint">传输层协议（均可被 Nginx 反代）</small>
         </div>
-    </div>
 
-    <!-- gRPC Fields -->
-    <div id="grpc-fields" style="display: {{if and .Inbound (eq .Inbound.Transport "grpc")}}block{{else}}none{{end}};">
+        <!-- WebSocket / XHTTP Fields -->
+        <div id="ws-xhttp-fields" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "ws") (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
+            <div class="form-group" id="xhttp-mode-field" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
+                <div style="padding: 0.75rem 1rem; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 0.5rem; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
+                    <strong style="color: var(--accent);">服务端 mode 固定为 auto</strong>，接受客户端所有上传模式。<br>
+                    · 设置了<strong>连接目标域名</strong>（CDN/Nginx 反代）→ 客户端使用 <code>stream-one</code><br>
+                    · 未设置连接目标域名（直连）→ 客户端使用 <code>auto</code>（等同 stream-one）<br>
+                    <span style="color: var(--warning);">⚠ stream-one 需要 Nginx 使用 <code>proxy_pass</code>（已自动生成），或 CF 开启 gRPC 支持。</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="path">路径</label>
+                <div class="input-with-button">
+                    <input type="text" id="path" name="path" value="{{if .Inbound}}{{.Inbound.Path}}{{end}}"
+                        placeholder="留空自动生成随机路径">
+                    <button type="button" class="btn btn-sm" onclick="generateRandomPath()">🎲 随机</button>
+                </div>
+                <small class="form-hint">WebSocket/XHTTP 路径（留空或点击随机自动生成）</small>
+            </div>
+            <div class="form-group">
+                <label for="host">Host (可选)</label>
+                <input type="text" id="host" name="host" value="{{if .Inbound}}{{.Inbound.Host}}{{end}}"
+                    placeholder="example.com">
+                <small class="form-hint">Host 头，通常留空</small>
+            </div>
+        </div>
+
+        <!-- gRPC Fields -->
+        <div id="grpc-fields" style="display: {{if and .Inbound (eq .Inbound.Transport "grpc")}}block{{else}}none{{end}};">
+            <div class="form-group">
+                <label for="service_name">服务名</label>
+                <input type="text" id="service_name" name="service_name" value="{{if .Inbound}}{{.Inbound.ServiceName}}{{end}}"
+                    placeholder="grpc-service">
+                <small class="form-hint">gRPC 服务名称</small>
+            </div>
+        </div>
+
         <div class="form-group">
-            <label for="service_name">服务名</label>
-            <input type="text" id="service_name" name="service_name" value="{{if .Inbound}}{{.Inbound.ServiceName}}{{end}}"
-                placeholder="grpc-service">
-            <small class="form-hint">gRPC 服务名称</small>
+            <label for="domain_id">SNI 域名</label>
+            <select id="domain_id" name="domain_id" onchange="toggleDomainFields(this.value)">
+                <option value="">无 (免 Nginx 配置 / 纯隧道模式)</option>
+                {{range .Domains}}
+                <option value="{{.ID}}" {{if and $.Inbound (eq $.Inbound.DomainID .ID)}}selected{{end}}>
+                    {{.Domain}}
+                </option>
+                {{end}}
+            </select>
+            <small class="form-hint">关联面板管理的域名（用于生成 Nginx 证书配置）</small>
         </div>
-    </div>
 
-    <div class="form-group">
-        <label for="domain_id">SNI 域名</label>
-        <select id="domain_id" name="domain_id" onchange="toggleDomainFields(this.value)">
-            <option value="">无 (免 Nginx 配置 / 纯隧道模式)</option>
-            {{range .Domains}}
-            <option value="{{.ID}}" {{if and $.Inbound (eq $.Inbound.DomainID .ID)}}selected{{end}}>
-                {{.Domain}}
-            </option>
-            {{end}}
-        </select>
-        <small class="form-hint">关联面板管理的域名（用于生成 Nginx 证书配置）</small>
-    </div>
+        <div class="form-group" id="custom-sni-field" style="display: {{if or (not .Inbound) (eq .Inbound.DomainID "")}}block{{else}}none{{end}};">
+            <label for="custom_sni">自定义 SNI (隧道模式核心)</label>
+            <input type="text" id="custom_sni" name="custom_sni" value="{{if .Inbound}}{{.Inbound.CustomSNI}}{{end}}"
+                placeholder="如搭配 CF Tunnel 请填入其实际绑定域名">
+            <small class="form-hint">选择【无】关联域名时，面板将拒绝生成 Nginx 配置。订阅中将采用此自定义 SNI。</small>
+        </div>
 
-    <div class="form-group" id="custom-sni-field" style="display: {{if or (not .Inbound) (eq .Inbound.DomainID "")}}block{{else}}none{{end}};">
-        <label for="custom_sni">自定义 SNI (隧道模式核心)</label>
-        <input type="text" id="custom_sni" name="custom_sni" value="{{if .Inbound}}{{.Inbound.CustomSNI}}{{end}}" placeholder="如搭配 CF Tunnel 请填入其实际绑定域名">
-        <small class="form-hint">选择【无】关联域名时，面板将<strong style="color:red;">拒绝生成</strong>相应的 Nginx 配置。此时生成的订阅中，将采用此自定义 SNI。</small>
-    </div>
+        <div class="form-group">
+            <label for="connect_domain">连接目标域名 (可选)</label>
+            <input type="text" id="connect_domain" name="connect_domain"
+                value="{{if .Inbound}}{{.Inbound.ConnectDomain}}{{end}}"
+                placeholder="cdn.example.com 或 example.com">
+            <small class="form-hint">
+                客户端实际连接的域名（CDN域名或父域名），留空则使用 SNI 域名。<br>
+                <strong>填写此项</strong>→ 订阅链接客户端 mode 自动设为 <code>stream-one</code>；<strong>留空</strong>→ <code>auto</code>。
+            </small>
+        </div>
 
-    <div class="form-group">
-        <label for="connect_domain">连接目标域名 (可选)</label>
-        <input type="text" id="connect_domain" name="connect_domain"
-            value="{{if .Inbound}}{{.Inbound.ConnectDomain}}{{end}}"
-            placeholder="cdn.example.com 或 example.com">
-        <small class="form-hint">客户端实际连接的域名（CDN域名或父域名），留空则使用 SNI 域名</small>
-    </div>
+    </div><!-- end proxy-fields -->
+
+    <!-- ===== WireGuard 字段 ===== -->
+    <div id="wg-fields" style="display: {{if and .Inbound (eq .Inbound.Protocol "wireguard")}}block{{else}}none{{end}};">
+
+        <div style="padding: 0.75rem 1rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); border-radius: 0.5rem; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+            此入站用于接收<strong>另一个 xray-panel 节点</strong>通过 WireGuard 出站转发的流量。<br>
+            配置完成后，在对端面板的出站配置中填入本节点的公网 IP、端口和公钥即可。<br>
+            <strong style="color: var(--warning);">不会出现在用户订阅链接中。</strong>
+        </div>
+
+        <div class="form-group">
+            <label for="wg_port">监听端口 (UDP)</label>
+            <div class="input-with-button">
+                <input type="number" id="wg_port" name="port" value="{{if .Inbound}}{{.Inbound.Port}}{{end}}"
+                    min="1024" max="65535" placeholder="如 51820">
+                <button type="button" class="btn btn-sm" onclick="generateWGPort()">🎲 随机</button>
+            </div>
+            <small class="form-hint">WireGuard UDP 监听端口，需在防火墙放行</small>
+        </div>
+
+        <div class="form-group">
+            <label for="wg_local_ip">本端虚拟 IP</label>
+            <input type="text" id="wg_local_ip" name="wg_local_ip"
+                value="{{if .Inbound}}{{.Inbound.WGLocalIP}}{{end}}"
+                placeholder="10.0.0.1/24">
+            <small class="form-hint">WireGuard 隧道内的本端 IP，与对端不能相同（如对端用 10.0.0.2/24）</small>
+        </div>
+
+        <div class="form-group">
+            <label for="wg_secret_key">私钥 (Secret Key)</label>
+            <div class="input-with-button">
+                <input type="password" id="wg_secret_key" name="wg_secret_key"
+                    placeholder="{{if .Inbound}}已设置，留空不修改{{else}}粘贴或生成私钥{{end}}">
+                <button type="button" class="btn btn-sm" onclick="generateWGKeys()">生成密钥对</button>
+            </div>
+            <small class="form-hint">服务端私钥，对端需要对应的公钥</small>
+        </div>
+
+        <div class="form-group">
+            <label for="wg_public_key">公钥 (Public Key)</label>
+            <input type="text" id="wg_public_key" name="wg_public_key"
+                value="{{if .Inbound}}{{.Inbound.WGPublicKey}}{{end}}"
+                placeholder="由私钥派生，填入对端出站配置中">
+            <small class="form-hint">将此公钥填入对端 xray-panel 的 WireGuard 出站配置中</small>
+        </div>
+
+        <div class="form-group">
+            <label for="wg_peer_pub_key">对端公钥 (Peer Public Key)</label>
+            <input type="text" id="wg_peer_pub_key" name="wg_peer_pub_key"
+                value="{{if .Inbound}}{{.Inbound.WGPeerPubKey}}{{end}}"
+                placeholder="对端 xray-panel 节点的 WireGuard 公钥">
+            <small class="form-hint">对端节点的公钥，用于验证连接来源</small>
+        </div>
+
+        <div class="form-group">
+            <label for="wg_mtu">MTU</label>
+            <input type="number" id="wg_mtu" name="wg_mtu"
+                value="{{if .Inbound}}{{if .Inbound.WGMTU}}{{.Inbound.WGMTU}}{{end}}{{end}}"
+                placeholder="1420" min="576" max="1500">
+            <small class="form-hint">默认 1420，通常无需修改</small>
+        </div>
+
+        <!-- WireGuard 入站强制排除订阅 -->
+        <input type="hidden" name="exclude_from_sub" value="true">
+        <!-- WireGuard 不使用 UDS -->
+        <input type="hidden" name="use_uds" value="false">
+        <!-- transport 占位，WireGuard 不需要但字段必须存在 -->
+        <input type="hidden" name="transport" value="raw">
+
+    </div><!-- end wg-fields -->
 
     <div class="form-group">
         <label for="remark">备注</label>
         <textarea id="remark" name="remark" rows="2">{{if .Inbound}}{{.Inbound.Remark}}{{end}}</textarea>
+    </div>
+
+    <!-- 排除订阅（非 WireGuard 时可手动勾选） -->
+    <div class="form-group" id="exclude-sub-field" style="display: {{if and .Inbound (eq .Inbound.Protocol "wireguard")}}none{{else}}block{{end}};">
+        <label for="exclude_from_sub_select">排除出订阅链接</label>
+        <select id="exclude_from_sub_select" name="exclude_from_sub">
+            <option value="false" {{if or (not .Inbound) (not .Inbound.ExcludeFromSub)}}selected{{end}}>否（正常出现在订阅中）</option>
+            <option value="true" {{if and .Inbound .Inbound.ExcludeFromSub}}selected{{end}}>是（不出现在订阅中）</option>
+        </select>
+        <small class="form-hint">内部中转节点可设为"是"，对用户隐藏</small>
     </div>
 
     <div class="form-actions">
@@ -128,11 +217,27 @@
 </form>
 
 <script>
+    function toggleProtocolFields(protocol) {
+        const proxyFields = document.getElementById('proxy-fields');
+        const wgFields = document.getElementById('wg-fields');
+        const excludeSubField = document.getElementById('exclude-sub-field');
+
+        if (protocol === 'wireguard') {
+            proxyFields.style.display = 'none';
+            wgFields.style.display = 'block';
+            if (excludeSubField) excludeSubField.style.display = 'none';
+        } else {
+            proxyFields.style.display = 'block';
+            wgFields.style.display = 'none';
+            if (excludeSubField) excludeSubField.style.display = 'block';
+        }
+    }
+
     function toggleTransportFields(transport) {
         const wsXhttpFields = document.getElementById('ws-xhttp-fields');
         const grpcFields = document.getElementById('grpc-fields');
         const xhttpModeField = document.getElementById('xhttp-mode-field');
-        
+
         if (transport === 'grpc') {
             wsXhttpFields.style.display = 'none';
             grpcFields.style.display = 'block';
@@ -148,50 +253,50 @@
 
     function toggleUDSFields(useUDS) {
         const portFields = document.getElementById('port-fields');
-        if (useUDS === 'true') {
-            portFields.style.display = 'none';
-        } else {
-            portFields.style.display = 'block';
-        }
+        if (portFields) portFields.style.display = useUDS === 'true' ? 'none' : 'block';
     }
 
     function toggleDomainFields(domainId) {
         const customSniField = document.getElementById('custom-sni-field');
-        if (customSniField) {
-            customSniField.style.display = domainId === '' ? 'block' : 'none';
-        }
+        if (customSniField) customSniField.style.display = domainId === '' ? 'block' : 'none';
     }
 
     function generateRandomPort() {
-        // 生成 10000-60000 之间的随机端口
         const port = Math.floor(Math.random() * 50000) + 10000;
         document.getElementById('port').value = port;
-        document.getElementById('random_port').value = 'false'; // 已经在前端生成了
+    }
+
+    function generateWGPort() {
+        const port = Math.floor(Math.random() * 10000) + 51820;
+        document.getElementById('wg_port').value = port;
     }
 
     function generateRandomPath() {
-        // 生成 16 位随机十六进制字符串作为路径
         const bytes = new Uint8Array(8);
         crypto.getRandomValues(bytes);
         const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
         document.getElementById('path').value = '/' + hex;
-        document.getElementById('random_path').value = 'false'; // 已经在前端生成了
+    }
+
+    // WireGuard key generation via Web Crypto (X25519)
+    async function generateWGKeys() {
+        try {
+            const keyPair = await crypto.subtle.generateKey(
+                { name: 'X25519' },
+                true,
+                ['deriveKey', 'deriveBits']
+            );
+            const privRaw = await crypto.subtle.exportKey('raw', keyPair.privateKey);
+            const pubRaw = await crypto.subtle.exportKey('raw', keyPair.publicKey);
+
+            const toBase64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+            document.getElementById('wg_secret_key').value = toBase64(privRaw);
+            document.getElementById('wg_public_key').value = toBase64(pubRaw);
+            showNotification('密钥对已生成，请保存私钥', 'success');
+        } catch (e) {
+            // X25519 may not be available in older browsers, show manual hint
+            showNotification('浏览器不支持自动生成，请使用 wg genkey | tee private.key | wg pubkey 手动生成', 'error');
+        }
     }
 </script>
-
-<style>
-    .input-with-button {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-    .input-with-button input {
-        flex: 1;
-    }
-    .btn-sm {
-        padding: 4px 8px;
-        font-size: 12px;
-        white-space: nowrap;
-    }
-</style>
 {{end}}

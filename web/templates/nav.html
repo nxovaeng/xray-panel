@@ -1,27 +1,68 @@
 {{define "nav"}}
-<nav class="sidebar">
+<nav class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <h2>🚀 Xray 面板</h2>
+        <h2>
+            <i data-lucide="zap" style="width:22px;height:22px;color:var(--accent);"></i>
+            Xray 面板
+        </h2>
     </div>
     <ul class="nav-menu">
-        <li><a href="/dashboard" class="{{if eq .Page "dashboard"}}active{{end}}">📊 仪表盘</a></li>
-        
+        <li>
+            <a href="/dashboard" class="{{if eq .Page "dashboard"}}active{{end}}">
+                <i data-lucide="layout-dashboard"></i> 仪表盘
+            </a>
+        </li>
+
         {{if eq .PanelMode "server"}}
-        <li><a href="/users" class="{{if eq .Page "users"}}active{{end}}">👥 用户管理</a></li>
-        <li><a href="/inbounds" class="{{if eq .Page "inbounds"}}active{{end}}">📥 入站配置</a></li>
+        <li>
+            <a href="/users" class="{{if eq .Page "users"}}active{{end}}">
+                <i data-lucide="users"></i> 用户管理
+            </a>
+        </li>
+        <li>
+            <a href="/inbounds" class="{{if eq .Page "inbounds"}}active{{end}}">
+                <i data-lucide="arrow-down-to-line"></i> 入站配置
+            </a>
+        </li>
         {{end}}
 
-        <li><a href="/outbounds" class="{{if eq .Page "outbounds"}}active{{end}}">📤 出站配置</a></li>
-        <li><a href="/routing" class="{{if eq .Page "routing"}}active{{end}}">🔀 路由规则</a></li>
-        
+        <li>
+            <a href="/outbounds" class="{{if eq .Page "outbounds"}}active{{end}}">
+                <i data-lucide="arrow-up-from-line"></i> 出站配置
+            </a>
+        </li>
+        <li>
+            <a href="/routing" class="{{if eq .Page "routing"}}active{{end}}">
+                <i data-lucide="git-branch"></i> 路由规则
+            </a>
+        </li>
+
         {{if eq .PanelMode "server"}}
-        <li><a href="/domains" class="{{if eq .Page "domains"}}active{{end}}">🌐 域名管理</a></li>
+        <li>
+            <a href="/domains" class="{{if eq .Page "domains"}}active{{end}}">
+                <i data-lucide="globe"></i> 域名管理
+            </a>
+        </li>
         {{end}}
-        
-        <li><a href="/settings" class="{{if eq .Page "settings"}}active{{end}}">🔄 应用配置</a></li>
+
+        <li>
+            <a href="/settings" class="{{if eq .Page "settings"}}active{{end}}">
+                <i data-lucide="settings"></i> 应用配置
+            </a>
+        </li>
     </ul>
     <div class="sidebar-footer">
-        <a href="/logout" class="btn btn-danger btn-block">退出登录</a>
+        <a href="/logout" class="btn btn-danger btn-block">
+            <i data-lucide="log-out" style="width:16px;height:16px;"></i> 退出登录
+        </a>
     </div>
 </nav>
+
+<!-- Mobile overlay -->
+<div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- Mobile menu toggle -->
+<button class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleSidebar()" aria-label="菜单">
+    <i data-lucide="menu"></i>
+</button>
 {{end}}

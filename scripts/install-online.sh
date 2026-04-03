@@ -249,8 +249,8 @@ generate_config() {
     
     log_info "生成默认配置文件..."
     
-    # 生成随机 JWT Secret
-    JWT_SECRET=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)
+    # 生成随机 JWT Secret（48位）
+    JWT_SECRET=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 48)
     
     cat > "$CONFIG_DIR/config.yaml" <<EOF
 # Xray Panel 配置文件
@@ -265,11 +265,11 @@ database:
 
 jwt:
   secret: "$JWT_SECRET"
-  expire_hour: 168  # 7 天
+  expire_hour: 168
 
 admin:
-  username: ""  # 首次启动自动生成
-  password: ""  # 首次启动自动生成
+  username: ""
+  password: ""
   email: ""
 
 xray:
@@ -277,6 +277,7 @@ xray:
   config_path: "/usr/local/etc/xray/config.json"
   assets_path: "/usr/local/share/xray"
   api_port: 10085
+  socket_dir: "/dev/shm"
 
 nginx:
   config_dir: "/etc/nginx/conf.d"

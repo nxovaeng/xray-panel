@@ -33,12 +33,8 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	s.db.Model(&models.Inbound{}).Where("enabled = ?", true).Count(&data.TotalInbounds)
 	s.db.Model(&models.Outbound{}).Where("enabled = ?", true).Count(&data.TotalOutbounds)
 
-	// Sum all user traffic
-	var users []models.User
-	s.db.Find(&users)
-	for _, u := range users {
-		data.TotalTrafficDown += u.TrafficUsed // Simplified: assuming all traffic is download
-	}
+	// Sum traffic in a single query instead of loading all users
+	s.db.Model(&models.User{}).Select("COALESCE(SUM(traffic_used), 0)").Scan(&data.TotalTrafficDown)
 
 	jsonOK(c, data)
 }

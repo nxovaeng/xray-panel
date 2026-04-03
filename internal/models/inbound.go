@@ -12,24 +12,26 @@ import (
 type Protocol string
 
 const (
-	ProtocolVLESS  Protocol = "vless"  // VLESS
-	ProtocolTrojan Protocol = "trojan" // Trojan
+	ProtocolVLESS     Protocol = "vless"
+	ProtocolTrojan    Protocol = "trojan"
+	ProtocolWireGuard Protocol = "wireguard" // WireGuard 入站（用于接收其他节点转发的流量）
 )
 
 // Transport represents the transport layer type
 type Transport string
 
 const (
-	TransportWS    Transport = "ws"    // WebSocket (可被 Nginx 反代)
-	TransportGRPC  Transport = "grpc"  // gRPC (可被 Nginx 反代)
-	TransportXHTTP Transport = "xhttp" // XHTTP (可被 Nginx 反代)
+	TransportWS    Transport = "ws"
+	TransportGRPC  Transport = "grpc"
+	TransportXHTTP Transport = "xhttp"
+	TransportRAW   Transport = "raw" // WireGuard 使用 raw/UDP
 )
 
 // Security represents the TLS/security type
 type Security string
 
 const (
-	SecurityNone Security = "none" // 始终为 none，由 Nginx 处理 TLS
+	SecurityNone Security = "none"
 )
 
 // Inbound represents an Xray inbound configuration
@@ -46,28 +48,36 @@ type Inbound struct {
 	Domain   *Domain `json:"domain,omitempty" gorm:"foreignKey:DomainID"`
 
 	// Transport-specific settings
-	Path        string `json:"path" form:"path"`                 // For WS/XHTTP: /path
-	ServiceName string `json:"service_name" form:"service_name"` // For gRPC: service name
-	Host        string `json:"host" form:"host"`                 // For WS/XHTTP: Host header
+	Path        string `json:"path" form:"path"`
+	ServiceName string `json:"service_name" form:"service_name"`
+	Host        string `json:"host" form:"host"`
 
 	// XHTTP specific
-	Mode string `json:"mode" form:"mode"` // auto, packet-up, stream-up (default: auto)
+	Mode string `json:"mode" form:"mode"`
 
 	// Wildcard certificate support
-	ActualDomain string `json:"actual_domain" form:"actual_domain"` // Generated subdomain for wildcard certs (e.g., abc123.example.com)
+	ActualDomain string `json:"actual_domain" form:"actual_domain"`
 
-	// 独立于面板管理的 SNI 域名（用于 Cloudflare Tunnel 场景，不生成 Nginx 配置）
+	// SNI for Cloudflare Tunnel / custom scenarios
 	CustomSNI string `json:"custom_sni" form:"custom_sni"`
 
-	// 连接目标域名（可选，用于 CDN 场景）
-	// 如果设置，客户端将连接到此域名，但 SNI 使用 ActualDomain
-	// 例如：SNI=abc.example.com, 连接目标=cdn.example.com 或 example.com
+	// CDN connect domain
 	ConnectDomain string `json:"connect_domain" form:"connect_domain"`
 
-	Enabled   bool      `json:"enabled" form:"enabled" gorm:"default:true"`
+	// WireGuard specific fields
+	WGSecretKey  string `json:"wg_secret_key" form:"wg_secret_key"`   // 服务端私钥
+	WGPublicKey  string `json:"wg_public_key" form:"wg_public_key"`   // 服务端公钥（展示用）
+	WGPeerPubKey string `json:"wg_peer_pub_key" form:"wg_peer_pub_key"` // 对端（出站节点）公钥
+	WGMTU        int    `json:"wg_mtu" form:"wg_mtu"`                 // MTU，默认 1420
+	WGLocalIP    string `json:"wg_local_ip" form:"wg_local_ip"`       // 本端 WireGuard 虚拟 IP，如 10.0.0.1/24
+
+	// 是否排除在订阅链接之外（WireGuard 入站等内部中转节点不应出现在用户订阅中）
+	ExcludeFromSub bool `json:"exclude_from_sub" form:"exclude_from_sub" gorm:"default:false"`
+
+	Enabled   bool      `json:"enabled" form:"enabled" gorm:"default:true;index"`
 	UseUDS    bool      `json:"use_uds" form:"use_uds" gorm:"default:true"`
 	Remark    string    `json:"remark" form:"remark"`
-	CreatedAt time.Time `json:"created_at" form:"created_at"`
+	CreatedAt time.Time `json:"created_at" form:"created_at" gorm:"index"`
 	UpdatedAt time.Time `json:"updated_at" form:"updated_at"`
 }
 
@@ -83,32 +93,24 @@ func (i *Inbound) BeforeCreate(tx *gorm.DB) error {
 }
 
 // IsGRPC returns true if transport is gRPC
-func (i *Inbound) IsGRPC() bool {
-	return i.Transport == TransportGRPC
-}
+func (i *Inbound) IsGRPC() bool { return i.Transport == TransportGRPC }
 
 // IsXHTTP returns true if transport is XHTTP
-func (i *Inbound) IsXHTTP() bool {
-	return i.Transport == TransportXHTTP
-}
+func (i *Inbound) IsXHTTP() bool { return i.Transport == TransportXHTTP }
 
 // IsWS returns true if transport is WebSocket
-func (i *Inbound) IsWS() bool {
-	return i.Transport == TransportWS
-}
+func (i *Inbound) IsWS() bool { return i.Transport == TransportWS }
 
 // IsTrojan returns true if protocol is Trojan
-func (i *Inbound) IsTrojan() bool {
-	return i.Protocol == ProtocolTrojan
-}
+func (i *Inbound) IsTrojan() bool { return i.Protocol == ProtocolTrojan }
 
 // IsVLESS returns true if protocol is VLESS
-func (i *Inbound) IsVLESS() bool {
-	return i.Protocol == ProtocolVLESS
-}
+func (i *Inbound) IsVLESS() bool { return i.Protocol == ProtocolVLESS }
+
+// IsWireGuard returns true if protocol is WireGuard
+func (i *Inbound) IsWireGuard() bool { return i.Protocol == ProtocolWireGuard }
 
 // SocketPath returns the Unix Domain Socket path for this inbound.
-// socketDir defaults to /dev/shm if empty.
 func (i *Inbound) SocketPath(socketDir string) string {
 	if socketDir == "" {
 		socketDir = "/dev/shm"

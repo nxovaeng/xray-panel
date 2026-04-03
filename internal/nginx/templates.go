@@ -108,13 +108,15 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_buffering off;
         proxy_request_buffering off;
         client_max_body_size 0;
-        proxy_read_timeout 1h;
-        proxy_send_timeout 1h;
-    }
-{{else if .IsWS}}    # WebSocket: {{.Tag}}{{if .ActualDomain}} (subdomain: {{.ActualDomain}}){{end}}
+        client_body_timeout 2h;
+        proxy_read_timeout 2h;
+        proxy_send_timeout 2h;
+        keepalive_timeout 2h;
+    }{{else if .IsWS}}    # WebSocket: {{.Tag}}{{if .ActualDomain}} (subdomain: {{.ActualDomain}}){{end}}
     location {{.Path}} {
         proxy_redirect off;
         proxy_pass {{.Upstream}};

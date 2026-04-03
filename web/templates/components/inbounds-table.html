@@ -14,9 +14,14 @@
         {{range .Inbounds}}
         <tr id="inbound-{{.ID}}">
             <td><code style="color: var(--accent); border-color: rgba(99, 102, 241, 0.2);">{{.Tag}}</code></td>
-            <td><span class="badge badge-info">{{.Protocol}}</span></td>
             <td>
-                {{if .UseUDS}}
+                <span class="badge badge-info">{{.Protocol}}</span>
+                {{if .ExcludeFromSub}}<span class="badge badge-warning" title="不出现在订阅链接中" style="margin-left:4px;">内部</span>{{end}}
+            </td>
+            <td>
+                {{if eq .Protocol "wireguard"}}
+                    <span style="color: var(--text-secondary);">{{.Port}}/UDP</span>
+                {{else if .UseUDS}}
                     <span class="badge badge-success" title="Unix Domain Socket: xray-{{.Tag}}.sock"><i data-lucide="zap" style="width: 12px; height: 12px; margin-right: 2px;"></i> UDS</span>
                 {{else}}
                     {{.Port}}

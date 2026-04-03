@@ -10,17 +10,17 @@ import (
 // User represents a proxy user with traffic and time limits
 type User struct {
 	ID           string    `json:"id" form:"id" gorm:"primaryKey"`
-	UUID         string    `json:"uuid" form:"uuid" gorm:"uniqueIndex;not null"` // Xray user UUID
+	UUID         string    `json:"uuid" form:"uuid" gorm:"uniqueIndex;not null"`
 	Name         string    `json:"name" form:"name" gorm:"not null"`
-	Email        string    `json:"email" form:"email"`
-	TrafficLimit int64     `json:"traffic_limit" form:"traffic_limit"` // bytes, 0 = unlimited
+	Email        string    `json:"email" form:"email" gorm:"index"`
+	TrafficLimit int64     `json:"traffic_limit" form:"traffic_limit"`
 	TrafficUsed  int64     `json:"traffic_used" form:"traffic_used"`
-	TrafficReset time.Time `json:"traffic_reset" form:"traffic_reset"` // when to reset traffic
-	ExpiryDate   time.Time `json:"expiry_date" form:"expiry_date"`     // zero = never expires
-	Enabled      bool      `json:"enabled" form:"enabled" gorm:"default:true"`
-	SubPath      string    `json:"sub_path" form:"sub_path" gorm:"uniqueIndex"` // subscription URL path
+	TrafficReset time.Time `json:"traffic_reset" form:"traffic_reset"`
+	ExpiryDate   time.Time `json:"expiry_date" form:"expiry_date" gorm:"index"`
+	Enabled      bool      `json:"enabled" form:"enabled" gorm:"default:true;index"`
+	SubPath      string    `json:"sub_path" form:"sub_path" gorm:"uniqueIndex"`
 	Note         string    `json:"note" form:"note"`
-	CreatedAt    time.Time `json:"created_at" form:"created_at"`
+	CreatedAt    time.Time `json:"created_at" form:"created_at" gorm:"index"`
 	UpdatedAt    time.Time `json:"updated_at" form:"updated_at"`
 }
 

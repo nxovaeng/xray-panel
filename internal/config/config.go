@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -80,34 +81,55 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// Validate checks configuration values for obvious problems
+func (c *Config) Validate() error {
+	if c.JWT.Secret == "" {
+		return fmt.Errorf("jwt.secret 不能为空")
+	}
+	if len(c.JWT.Secret) < 16 {
+		return fmt.Errorf("jwt.secret 长度至少 16 位，当前 %d 位", len(c.JWT.Secret))
+	}
+	if c.Database.Path == "" {
+		return fmt.Errorf("database.path 不能为空")
+	}
+	if c.Server.Listen == "" {
+		return fmt.Errorf("server.listen 不能为空")
+	}
+	return nil
 }
 
 // Default returns default configuration
 func Default() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Listen: ":8082",
-			Debug:  true,
+			Listen: "127.0.0.1:8082",
+			Debug:  false,
 		},
 		Log: LogConfig{
 			Level:      "info",
-			File:       "",
+			File:       "/opt/xray-panel/logs/panel.log",
 			MaxSize:    100,
-			MaxBackups: 3,
-			MaxAge:     28,
+			MaxBackups: 7,
+			MaxAge:     30,
 			Compress:   true,
 		},
 		Database: DatabaseConfig{
-			Path: "/etc/xray-panel/panel.db",
+			Path: "/opt/xray-panel/data/panel.db",
 		},
 		JWT: JWTConfig{
 			Secret:     "change-me-in-production",
-			ExpireHour: 24,
+			ExpireHour: 168,
 		},
 		Admin: AdminConfig{
-			Username: "", // Empty means auto-generate
-			Password: "", // Empty means auto-generate
+			Username: "",
+			Password: "",
 			Email:    "",
 		},
 		Xray: XrayConfig{

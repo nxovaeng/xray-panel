@@ -9,7 +9,7 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gorml "gorm.io/gorm/logger"
 
 	"xray-panel/internal/config"
 	applogger "xray-panel/internal/logger"
@@ -24,9 +24,9 @@ func Init(dbPath string) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	// Open database connection
+	// Open database connection with silent logger (SQL logs are too noisy in production)
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: gorml.Default.LogMode(gorml.Silent),
 	})
 	if err != nil {
 		return nil, err
@@ -79,19 +79,21 @@ func Seed(db *gorm.DB, cfg *config.Config) error {
 			return err
 		}
 
-		// Log the credentials
+		// Log the credentials — 只打印用户名，密码不写日志
 		applogger.Info("========================================")
 		applogger.Info("🔐 初始管理员账户已创建")
 		applogger.Info("========================================")
 		applogger.Info("用户名: %s", username)
-		applogger.Info("密码:   %s", password)
+		applogger.Info("密码已生成，请通过 'panel admin' 命令查看")
 		if email != "" {
 			applogger.Info("邮箱:   %s", email)
 		}
 		applogger.Info("========================================")
 		applogger.Info("⚠️  请立即登录并修改密码！")
-		applogger.Info("⚠️  请妥善保存这些凭据，它们不会再次显示！")
+		applogger.Info("运行 'panel admin' 查看完整凭据（仅显示一次）")
 		applogger.Info("========================================")
+		// 将密码单独输出到 stdout（不进日志文件），方便首次部署时查看
+		fmt.Printf("\n🔑 初始密码: %s\n   (此信息不会再次显示，请立即保存)\n\n", password)
 	}
 
 	// 2. Default settings
@@ -125,12 +127,10 @@ func generateRandomString(length int) string {
 func generateRandomPassword(length int) string {
 	b := make([]byte, length)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback to simple random if crypto/rand fails
-		return generateRandomString(length)
+		// crypto/rand failure is a fatal system error, not a recoverable condition
+		panic("crypto/rand unavailable: " + err.Error())
 	}
-	// Use base64 encoding for better character variety
 	password := base64.URLEncoding.EncodeToString(b)
-	// Trim to desired length
 	if len(password) > length {
 		password = password[:length]
 	}

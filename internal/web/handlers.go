@@ -321,7 +321,9 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 	// Preserve traffic used
 	user.TrafficUsed = existingUser.TrafficUsed
 
-	if err := h.db.Model(&models.User{}).Where("id = ?", id).Updates(&user).Error; err != nil {
+	// Use Save to avoid GORM skipping zero-value bool fields (e.g. Enabled=false)
+	user.ID = existingUser.ID
+	if err := h.db.Save(&user).Error; err != nil {
 		logger.Error("Failed to update user %s: %v", id, err)
 		c.String(http.StatusInternalServerError, "Error updating user: "+err.Error())
 		return
@@ -352,7 +354,7 @@ func (h *Handler) DeleteUser(c *gin.Context) {
 func (h *Handler) SearchUsers(c *gin.Context) {
 	query := c.Query("q")
 	var users []models.User
-	if err := h.db.Where("email LIKE ?", "%"+query+"%").Find(&users).Error; err != nil {
+	if err := h.db.Where("email LIKE ? OR name LIKE ?", "%"+query+"%", "%"+query+"%").Find(&users).Error; err != nil {
 		c.String(http.StatusInternalServerError, "Error searching users")
 		return
 	}
@@ -420,6 +422,30 @@ func (h *Handler) CreateInbound(c *gin.Context) {
 		return
 	}
 
+	// WireGuard specific fields (ShouldBind handles most, but secret key needs special care)
+	// ExcludeFromSub is a bool from select, parse manually
+	inbound.ExcludeFromSub = c.PostForm("exclude_from_sub") == "true"
+	if mtuStr := c.PostForm("wg_mtu"); mtuStr != "" {
+		if mtu, err := strconv.Atoi(mtuStr); err == nil && mtu > 0 {
+			inbound.WGMTU = mtu
+		}
+	}
+
+	// WireGuard inbound: force UseUDS=false and skip domain logic
+	if inbound.Protocol == models.ProtocolWireGuard {
+		inbound.UseUDS = false
+		inbound.DomainID = ""
+		inbound.ActualDomain = ""
+		if err := h.db.Create(&inbound).Error; err != nil {
+			logger.Error("Failed to create wireguard inbound %s: %v", inbound.Tag, err)
+			c.String(http.StatusInternalServerError, "Error creating inbound")
+			return
+		}
+		logger.Info("WireGuard inbound created: %s (Port: %d)", inbound.Tag, inbound.Port)
+		h.InboundsTable(c)
+		return
+	}
+
 	// Get domain_id from form (handle empty string)
 	domainID := c.PostForm("domain_id")
 	if domainID != "" {
@@ -476,67 +502,103 @@ func (h *Handler) CreateInbound(c *gin.Context) {
 
 func (h *Handler) UpdateInbound(c *gin.Context) {
 	id := c.Param("id")
-	var inbound models.Inbound
-	if err := c.ShouldBind(&inbound); err != nil {
-		c.String(http.StatusBadRequest, "Invalid input")
-		return
-	}
 
-	// Get existing inbound
+	// Get existing inbound first
 	var existingInbound models.Inbound
 	if err := h.db.First(&existingInbound, "id = ?", id).Error; err != nil {
 		c.String(http.StatusNotFound, "Inbound not found")
 		return
 	}
 
-	// Get domain_id from form (handle empty string)
+	// Manually parse form fields to avoid GORM zero-value skipping issue
+	// and bool-from-string binding issues with ShouldBind
+	existingInbound.Tag = c.PostForm("tag")
+	existingInbound.Protocol = models.Protocol(c.PostForm("protocol"))
+	existingInbound.Transport = models.Transport(c.PostForm("transport"))
+	existingInbound.Path = c.PostForm("path")
+	existingInbound.ServiceName = c.PostForm("service_name")
+	existingInbound.Host = c.PostForm("host")
+	existingInbound.Mode = c.PostForm("mode")
+	existingInbound.Remark = c.PostForm("remark")
+	existingInbound.ConnectDomain = c.PostForm("connect_domain")
+	existingInbound.CustomSNI = c.PostForm("custom_sni")
+
+	// WireGuard specific fields
+	if c.PostForm("wg_secret_key") != "" {
+		existingInbound.WGSecretKey = c.PostForm("wg_secret_key")
+	}
+	existingInbound.WGPublicKey = c.PostForm("wg_public_key")
+	existingInbound.WGPeerPubKey = c.PostForm("wg_peer_pub_key")
+	existingInbound.WGLocalIP = c.PostForm("wg_local_ip")
+	if mtuStr := c.PostForm("wg_mtu"); mtuStr != "" {
+		if mtu, err := strconv.Atoi(mtuStr); err == nil && mtu > 0 {
+			existingInbound.WGMTU = mtu
+		}
+	}
+
+	// ExcludeFromSub
+	existingInbound.ExcludeFromSub = c.PostForm("exclude_from_sub") == "true"
+
+	// Parse port (keep existing if not provided)
+	if portStr := c.PostForm("port"); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil {
+			existingInbound.Port = port
+		}
+	}
+
+	// WireGuard inbound: skip UDS and domain logic
+	if existingInbound.Protocol == models.ProtocolWireGuard {
+		existingInbound.UseUDS = false
+		existingInbound.DomainID = ""
+		existingInbound.ActualDomain = ""
+		if err := h.db.Save(&existingInbound).Error; err != nil {
+			c.String(http.StatusInternalServerError, "Error updating inbound")
+			return
+		}
+		logger.Info("WireGuard inbound updated: %s", existingInbound.Tag)
+		h.InboundsTable(c)
+		return
+	}
+
+	// Parse use_uds (string "true"/"false" from HTML select)
+	existingInbound.UseUDS = c.PostForm("use_uds") == "true"
+
+	// Set defaults
+	if existingInbound.Protocol == "" {
+		existingInbound.Protocol = models.ProtocolVLESS
+	}
+	if existingInbound.Listen == "" {
+		existingInbound.Listen = "127.0.0.1"
+	}
+
+	// Handle domain_id and ActualDomain
 	domainID := c.PostForm("domain_id")
 	if domainID != "" {
-		inbound.DomainID = domainID
-	} else {
-		inbound.DomainID = ""
-	}
-
-	// Check if domain changed and handle wildcard certificate
-	if inbound.DomainID != "" && inbound.DomainID != existingInbound.DomainID {
-		logger.Info("UpdateInbound: Domain changed for inbound %s (old: %s, new: %s)", id, existingInbound.DomainID, inbound.DomainID)
-
-		var domain models.Domain
-		if err := h.db.First(&domain, "id = ?", inbound.DomainID).Error; err == nil {
-			logger.Info("UpdateInbound: Found new domain: %s (ID: %s)", domain.Domain, domain.ID)
-
-			// Check if domain is a wildcard certificate
-			// Use IsWildcard field from database or fallback to checking domain prefix
-			isWildcard := domain.IsWildcard || strings.HasPrefix(domain.Domain, "*.")
-			if isWildcard {
-				baseDomain := strings.TrimPrefix(domain.Domain, "*.")
-				subdomain := generateRandomSubdomain()
-				inbound.ActualDomain = subdomain + "." + baseDomain
-				logger.Info("UpdateInbound: Generated new subdomain for wildcard cert: %s (base: %s, wildcard: %s, IsWildcard: %v)",
-					inbound.ActualDomain, baseDomain, domain.Domain, domain.IsWildcard)
-			} else {
-				// Not a wildcard, use domain directly
-				inbound.ActualDomain = domain.Domain
-				logger.Info("UpdateInbound: New domain is not wildcard, using domain: %s", domain.Domain)
+		if domainID != existingInbound.DomainID {
+			// Domain changed — recalculate ActualDomain
+			var domain models.Domain
+			if err := h.db.First(&domain, "id = ?", domainID).Error; err == nil {
+				isWildcard := domain.IsWildcard || strings.HasPrefix(domain.Domain, "*.")
+				if isWildcard {
+					baseDomain := strings.TrimPrefix(domain.Domain, "*.")
+					existingInbound.ActualDomain = generateRandomSubdomain() + "." + baseDomain
+				} else {
+					existingInbound.ActualDomain = domain.Domain
+				}
 			}
-		} else {
-			logger.Warn("UpdateInbound: Failed to find domain with ID %s: %v", inbound.DomainID, err)
 		}
-	} else if inbound.DomainID == "" {
-		// Domain removed, clear ActualDomain
-		inbound.ActualDomain = ""
-		logger.Info("UpdateInbound: Domain removed from inbound %s, cleared ActualDomain", id)
+		existingInbound.DomainID = domainID
 	} else {
-		// Domain unchanged, preserve existing ActualDomain
-		inbound.ActualDomain = existingInbound.ActualDomain
-		logger.Info("UpdateInbound: Domain unchanged for inbound %s, preserving ActualDomain: %s", id, inbound.ActualDomain)
+		existingInbound.DomainID = ""
+		existingInbound.ActualDomain = ""
 	}
 
-	if err := h.db.Model(&models.Inbound{}).Where("id = ?", id).Updates(&inbound).Error; err != nil {
+	if err := h.db.Save(&existingInbound).Error; err != nil {
 		c.String(http.StatusInternalServerError, "Error updating inbound")
 		return
 	}
 
+	inbound := existingInbound
 	logger.Info("UpdateInbound: Inbound updated: %s (DomainID: %s, ActualDomain: %s)", id, inbound.DomainID, inbound.ActualDomain)
 
 	// Regenerate Nginx config if domain is set
@@ -896,7 +958,14 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 	// Set update timestamp
 	outbound.UpdatedAt = time.Now()
 
-	if err := h.db.Model(&models.Outbound{}).Where("id = ?", id).Updates(&outbound).Error; err != nil {
+	// Use Save to avoid GORM skipping zero-value bool fields (e.g. Enabled=false)
+	var existing models.Outbound
+	if err := h.db.First(&existing, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Outbound not found")
+		return
+	}
+	outbound.ID = existing.ID
+	if err := h.db.Save(&outbound).Error; err != nil {
 		logger.Error("Failed to update outbound %s: %v", id, err)
 		c.String(http.StatusInternalServerError, "Error updating outbound: "+err.Error())
 		return
@@ -987,7 +1056,14 @@ func (h *Handler) UpdateRouting(c *gin.Context) {
 		return
 	}
 
-	if err := h.db.Model(&models.RoutingRule{}).Where("id = ?", id).Updates(&rule).Error; err != nil {
+	// Use Save to avoid GORM skipping zero-value bool fields (e.g. Enabled=false)
+	var existing models.RoutingRule
+	if err := h.db.First(&existing, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Routing rule not found")
+		return
+	}
+	rule.ID = existing.ID
+	if err := h.db.Save(&rule).Error; err != nil {
 		c.String(http.StatusInternalServerError, "Error updating routing rule")
 		return
 	}

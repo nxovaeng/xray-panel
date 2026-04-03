@@ -4,15 +4,54 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	xraypanel "xray-panel"
 	"xray-panel/internal/config"
+	"xray-panel/internal/logger"
 	"xray-panel/internal/nginx"
 	"xray-panel/internal/web"
 )
+
+// loginRateLimiter is a simple in-memory rate limiter for login attempts
+type loginRateLimiter struct {
+	mu       sync.Mutex
+	attempts map[string][]time.Time
+}
+
+var loginLimiter = &loginRateLimiter{
+	attempts: make(map[string][]time.Time),
+}
+
+// allow returns true if the IP is allowed to attempt login
+// Limit: 10 attempts per 5 minutes per IP
+func (l *loginRateLimiter) allow(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	window := 5 * time.Minute
+	maxAttempts := 10
+
+	// Clean old attempts
+	valid := l.attempts[ip][:0]
+	for _, t := range l.attempts[ip] {
+		if now.Sub(t) < window {
+			valid = append(valid, t)
+		}
+	}
+	l.attempts[ip] = valid
+
+	if len(l.attempts[ip]) >= maxAttempts {
+		return false
+	}
+	l.attempts[ip] = append(l.attempts[ip], now)
+	return true
+}
 
 // Server represents the API server
 type Server struct {
@@ -29,6 +68,15 @@ type Server struct {
 func NewServer(cfg *config.Config, db *gorm.DB) *Server {
 	if !cfg.Server.Debug {
 		gin.SetMode(gin.ReleaseMode)
+	}
+
+	// Warn about weak JWT secret
+	weakSecrets := []string{"change-me-in-production", "change-me-in-production-12345", "change-me-please-use-random-string-min-32-chars"}
+	for _, weak := range weakSecrets {
+		if cfg.JWT.Secret == weak || len(cfg.JWT.Secret) < 32 {
+			logger.Warn("⚠️  JWT secret 过弱或使用默认值，生产环境存在安全风险！请修改 config.yaml 中的 jwt.secret")
+			break
+		}
 	}
 
 	// Use the embedded files from the root package
@@ -74,6 +122,19 @@ func (s *Server) Run() error {
 
 // setupRoutes configures all API routes
 func (s *Server) setupRoutes() {
+	// Security headers middleware
+	s.router.Use(func(c *gin.Context) {
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("X-XSS-Protection", "1; mode=block")
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+		// Only set HSTS when behind HTTPS
+		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+			c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		c.Next()
+	})
+
 	// Serve static files from embed
 	s.router.StaticFS("/static", http.FS(mustSub(s.embedFiles, "static")))
 
@@ -126,11 +187,8 @@ func (s *Server) setupRoutes() {
 	// API routes - public (no auth required)
 	apiPublic := s.router.Group("/api")
 	{
-		// Health check
+		// Health check only - no sensitive info
 		apiPublic.GET("/health", s.handleHealth)
-
-		// Xray status (public for dashboard display)
-		apiPublic.GET("/xray/status", s.handleXrayStatus)
 	}
 
 	// API routes - protected (require session auth)
@@ -176,6 +234,7 @@ func (s *Server) setupRoutes() {
 		api.DELETE("/domains/:id", s.webHandler.DeleteDomain)
 
 		// Xray control (protected)
+		api.GET("/xray/status", s.handleXrayStatus)
 		api.POST("/xray/restart", s.handleXrayRestart)
 		api.GET("/xray/config", s.handleGetXrayConfig)
 		api.POST("/xray/apply", s.handleApplyXrayConfig)

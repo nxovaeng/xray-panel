@@ -42,8 +42,12 @@ func (s *Server) handleSubscription(c *gin.Context) {
 	}
 
 	// Generate links for all inbounds
+	// Skip inbounds marked as exclude_from_sub (e.g. WireGuard relay inbounds)
 	var links []string
 	for _, inbound := range inbounds {
+		if inbound.ExcludeFromSub {
+			continue
+		}
 		link := generateVLESSLink(user, inbound)
 		if link != "" {
 			links = append(links, link)
@@ -178,9 +182,16 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 		if inbound.Host != "" {
 			params.Set("host", inbound.Host)
 		}
-		if inbound.Mode != "" {
-			params.Set("mode", inbound.Mode)
+		// 客户端 mode 根据场景自动选择：
+		// - 过 Nginx/CDN (TLS H2)：stream-one（官方推荐，比 auto 更稳，避免断流）
+		// - 直连 Reality：auto（等同 stream-one）
+		// ConnectDomain 非空说明是 CDN/Nginx 反代场景
+		clientMode := "auto"
+		if inbound.ConnectDomain != "" {
+			// CDN 场景：明确指定 stream-one，避免 auto 选到 stream-up 导致断流
+			clientMode = "stream-one"
 		}
+		params.Set("mode", clientMode)
 
 	case models.TransportGRPC:
 		params.Set("serviceName", inbound.ServiceName)

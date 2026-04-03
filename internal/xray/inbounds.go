@@ -93,6 +93,11 @@ type SniffingConfig struct {
 
 // generateInbound generates a single inbound configuration
 func (g *Generator) generateInbound(inbound models.Inbound) (*InboundConfig, error) {
+	// WireGuard is handled separately — no stream settings, no users
+	if inbound.Protocol == models.ProtocolWireGuard {
+		return g.generateWireGuardInbound(inbound)
+	}
+
 	// Determine listen address and port
 	listen := inbound.Listen
 	var port interface{} = inbound.Port
@@ -132,10 +137,7 @@ func (g *Generator) generateInbound(inbound models.Inbound) (*InboundConfig, err
 		streamSettings.XHTTPSettings = &XHTTPSettings{
 			Path: inbound.Path,
 			Host: inbound.Host,
-			Mode: inbound.Mode,
-		}
-		if inbound.Mode == "" {
-			streamSettings.XHTTPSettings.Mode = "auto"
+			Mode: "auto", // 服务端固定 auto，接受客户端所有上传模式
 		}
 
 	case models.TransportGRPC:
@@ -190,9 +192,8 @@ func (g *Generator) generateVLESSSettings() map[string]interface{} {
 func (g *Generator) generateTrojanSettings() map[string]interface{} {
 	clients := make([]map[string]interface{}, 0)
 	for _, user := range g.getActiveUsers() {
-		// Trojan 使用 password 而不是 UUID
 		client := map[string]interface{}{
-			"password": user.UUID, // 使用 UUID 作为 Trojan 密码
+			"password": user.UUID,
 			"email":    user.Email,
 			"level":    0,
 		}
@@ -202,4 +203,49 @@ func (g *Generator) generateTrojanSettings() map[string]interface{} {
 	return map[string]interface{}{
 		"clients": clients,
 	}
+}
+
+// generateWireGuardInbound generates a WireGuard inbound configuration.
+// WireGuard in Xray acts as a "freedom" tunnel — it receives traffic from
+// another Xray node's WireGuard outbound and routes it locally.
+// The peer is the remote xray-panel node that forwards traffic to this server.
+func (g *Generator) generateWireGuardInbound(inbound models.Inbound) (*InboundConfig, error) {
+	if inbound.WGSecretKey == "" {
+		return nil, fmt.Errorf("wireguard inbound %q: secret key is required", inbound.Tag)
+	}
+	if inbound.WGPeerPubKey == "" {
+		return nil, fmt.Errorf("wireguard inbound %q: peer public key is required", inbound.Tag)
+	}
+
+	mtu := inbound.WGMTU
+	if mtu == 0 {
+		mtu = 1420
+	}
+
+	localIP := inbound.WGLocalIP
+	if localIP == "" {
+		localIP = "10.0.0.1/24"
+	}
+
+	settings := map[string]interface{}{
+		"secretKey": inbound.WGSecretKey,
+		"address":   []string{localIP},
+		"peers": []map[string]interface{}{
+			{
+				"publicKey":  inbound.WGPeerPubKey,
+				"allowedIPs": []string{"0.0.0.0/0", "::/0"},
+			},
+		},
+		"mtu":            mtu,
+		"noKernelTun":    true, // Xray WireGuard 使用用户态实现，无需内核模块
+	}
+
+	return &InboundConfig{
+		Tag:      inbound.Tag,
+		Listen:   inbound.Listen,
+		Port:     inbound.Port,
+		Protocol: "wireguard",
+		Settings: settings,
+		// WireGuard 不需要 StreamSettings 和 Sniffing
+	}, nil
 }
