@@ -141,7 +141,7 @@ install_xray() {
         log_warning "Xray 已安装"
         xray version
     else
-        bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/master/install-release.sh)" @ install
+        bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
         log_success "Xray-core 安装完成"
     fi
 }
