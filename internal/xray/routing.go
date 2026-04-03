@@ -38,6 +38,44 @@ func (g *Generator) generateRouting() *RoutingConfig {
 		OutboundTag: "api",
 	})
 
+	if g.panelMode == "client" {
+		// Route upstream proxy DNS to the primary configured wireguard/trojan/socks proxy
+		// This uses string literal to avoid depending heavily on user input formatting.
+		proxyTag := "proxy"
+		if len(g.outbounds) > 0 {
+			proxyTag = g.outbounds[0].Tag
+		}
+
+		// Route intercepted 53 DNS to Xray internal DNS process
+		routing.Rules = append(routing.Rules, RoutingRule{
+			Type:        "field",
+			InboundTag:  []string{"dns-in"},
+			OutboundTag: "dns-out",
+		})
+
+		// Route DNS server IPs
+		// Remote DNS (Cloudflare) -> Proxy
+		routing.Rules = append(routing.Rules, RoutingRule{
+			Type:        "field",
+			IP:          []string{"1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"},
+			OutboundTag: proxyTag,
+		})
+
+		// Local DNS (AliDNS) -> Direct
+		routing.Rules = append(routing.Rules, RoutingRule{
+			Type:        "field",
+			IP:          []string{"223.5.5.5", "223.6.6.6"},
+			OutboundTag: "direct",
+		})
+
+		// Route client inbounds through proxy
+		routing.Rules = append(routing.Rules, RoutingRule{
+			Type:        "field",
+			InboundTag:  []string{"socks-in", "http-in"},
+			OutboundTag: proxyTag,
+		})
+	}
+
 	// Sort rules by priority
 	sortedRules := make([]models.RoutingRule, len(g.rules))
 	copy(sortedRules, g.rules)

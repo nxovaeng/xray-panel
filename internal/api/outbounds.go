@@ -34,8 +34,30 @@ type CreateOutboundRequest struct {
 	TrojanPassword string `json:"trojan_password" form:"trojan_password"`
 	TrojanSNI      string `json:"trojan_sni" form:"trojan_sni"`
 	TrojanNetwork  string `json:"trojan_network" form:"trojan_network"`
-	Priority       int    `json:"priority" form:"priority"`
-	Remark         string `json:"remark" form:"remark"`
+	
+	// VLESS / VMess settings
+	UUID     string `json:"uuid" form:"uuid"`
+	Flow     string `json:"flow" form:"flow"`
+	Security string `json:"security" form:"security"`
+
+	// Transport settings
+	Network     string `json:"network" form:"network"`
+	HeaderType  string `json:"header_type" form:"header_type"`
+	RequestHost string `json:"request_host" form:"request_host"`
+	Path        string `json:"path" form:"path"`
+	ServiceName string `json:"service_name" form:"service_name"`
+
+	// TLS / Reality settings
+	TLS            bool   `json:"tls" form:"tls"`
+	TLSServerName  string `json:"tls_server_name" form:"tls_server_name"`
+	TLSALPN        string `json:"tls_alpn" form:"tls_alpn"`
+	Reality        bool   `json:"reality" form:"reality"`
+	RealityPubKey  string `json:"reality_pubkey" form:"reality_pubkey"`
+	RealityShortID string `json:"reality_short_id" form:"reality_short_id"`
+	RealitySNI     string `json:"reality_sni" form:"reality_sni"`
+
+	Priority int    `json:"priority" form:"priority"`
+	Remark   string `json:"remark" form:"remark"`
 }
 
 // handleListOutbounds returns all outbounds
@@ -87,6 +109,21 @@ func (s *Server) handleCreateOutbound(c *gin.Context) {
 		TrojanPassword: req.TrojanPassword,
 		TrojanSNI:      req.TrojanSNI,
 		TrojanNetwork:  req.TrojanNetwork,
+		UUID:           req.UUID,
+		Flow:           req.Flow,
+		Security:       req.Security,
+		Network:        req.Network,
+		HeaderType:     req.HeaderType,
+		RequestHost:    req.RequestHost,
+		Path:           req.Path,
+		ServiceName:    req.ServiceName,
+		TLS:            req.TLS,
+		TLSServerName:  req.TLSServerName,
+		TLSALPN:        req.TLSALPN,
+		Reality:        req.Reality,
+		RealityPubKey:  req.RealityPubKey,
+		RealityShortID: req.RealityShortID,
+		RealitySNI:     req.RealitySNI,
 		Priority:       req.Priority,
 		Remark:         req.Remark,
 		Enabled:        true,
@@ -158,6 +195,21 @@ func (s *Server) handleUpdateOutbound(c *gin.Context) {
 	outbound.TrojanPassword = req.TrojanPassword
 	outbound.TrojanSNI = req.TrojanSNI
 	outbound.TrojanNetwork = req.TrojanNetwork
+	outbound.UUID = req.UUID
+	outbound.Flow = req.Flow
+	outbound.Security = req.Security
+	outbound.Network = req.Network
+	outbound.HeaderType = req.HeaderType
+	outbound.RequestHost = req.RequestHost
+	outbound.Path = req.Path
+	outbound.ServiceName = req.ServiceName
+	outbound.TLS = req.TLS
+	outbound.TLSServerName = req.TLSServerName
+	outbound.TLSALPN = req.TLSALPN
+	outbound.Reality = req.Reality
+	outbound.RealityPubKey = req.RealityPubKey
+	outbound.RealityShortID = req.RealityShortID
+	outbound.RealitySNI = req.RealitySNI
 	outbound.Priority = req.Priority
 	outbound.Remark = req.Remark
 
@@ -230,6 +282,8 @@ func testOutboundConnectivity(outbound models.Outbound) OutboundTestResult {
 		return testSOCKS5Connectivity(outbound)
 	case models.OutboundTrojan:
 		return testTrojanConnectivity(outbound)
+	case models.OutboundVLESS, models.OutboundVMess:
+		return testGenericTCPConnectivity(outbound)
 	default:
 		return OutboundTestResult{
 			Success: false,
@@ -402,6 +456,39 @@ func testTrojanConnectivity(outbound models.Outbound) OutboundTestResult {
 	return OutboundTestResult{
 		Success:  true,
 		Message:  "TCP connection to Trojan server successful",
+		Latency:  latency,
+		Endpoint: endpoint,
+	}
+}
+
+// testGenericTCPConnectivity tests basic TCP connectivity for VLESS/VMess
+func testGenericTCPConnectivity(outbound models.Outbound) OutboundTestResult {
+	if outbound.Server == "" || outbound.Port == 0 {
+		return OutboundTestResult{
+			Success: false,
+			Message: "Server address or port not configured",
+		}
+	}
+
+	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
+	start := time.Now()
+
+	// Test TCP connectivity
+	conn, err := net.DialTimeout("tcp", endpoint, 5*time.Second)
+	if err != nil {
+		return OutboundTestResult{
+			Success:  false,
+			Message:  fmt.Sprintf("TCP connection failed: %v", err),
+			Endpoint: endpoint,
+		}
+	}
+	defer conn.Close()
+
+	latency := time.Since(start).Milliseconds()
+
+	return OutboundTestResult{
+		Success:  true,
+		Message:  fmt.Sprintf("TCP connection to %s successful", outbound.Type),
 		Latency:  latency,
 		Endpoint: endpoint,
 	}

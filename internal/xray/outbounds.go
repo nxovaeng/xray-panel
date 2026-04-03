@@ -54,6 +54,10 @@ func (g *Generator) generateOutbounds() []OutboundConfig {
 			outbounds = append(outbounds, g.generateSOCKS5Outbound(outbound))
 		case models.OutboundTrojan:
 			outbounds = append(outbounds, g.generateTrojanOutbound(outbound))
+		case models.OutboundVLESS:
+			outbounds = append(outbounds, g.generateVLESSOutbound(outbound))
+		case models.OutboundVMess:
+			outbounds = append(outbounds, g.generateVMessOutbound(outbound))
 		}
 	}
 
@@ -168,24 +172,134 @@ func (g *Generator) generateTrojanOutbound(outbound models.Outbound) OutboundCon
 	}
 
 	// Add stream settings for TLS and transport
-	if outbound.TrojanSNI != "" || outbound.TrojanNetwork != "" {
-		streamSettings := &StreamSettings{
-			Network:  "tcp",
-			Security: "tls",
-		}
-
-		if outbound.TrojanNetwork != "" {
-			streamSettings.Network = outbound.TrojanNetwork
-		}
-
-		if outbound.TrojanSNI != "" {
-			streamSettings.TLSSettings = &TLSSettings{
-				ServerName: outbound.TrojanSNI,
-			}
-		}
-
-		config.StreamSettings = streamSettings
-	}
+	config.StreamSettings = g.generateOutboundStreamSettings(outbound)
 
 	return config
+}
+
+// generateVLESSOutbound generates a VLESS outbound
+func (g *Generator) generateVLESSOutbound(outbound models.Outbound) OutboundConfig {
+	vnext := []map[string]interface{}{
+		{
+			"address": outbound.Server,
+			"port":    outbound.Port,
+			"users": []map[string]interface{}{
+				{
+					"id":         outbound.UUID,
+					"encryption": "none",
+					"flow":       outbound.Flow,
+				},
+			},
+		},
+	}
+
+	config := OutboundConfig{
+		Tag:      outbound.Tag,
+		Protocol: "vless",
+		Settings: map[string]interface{}{
+			"vnext": vnext,
+		},
+	}
+
+	config.StreamSettings = g.generateOutboundStreamSettings(outbound)
+	return config
+}
+
+// generateVMessOutbound generates a VMess outbound
+func (g *Generator) generateVMessOutbound(outbound models.Outbound) OutboundConfig {
+	vnext := []map[string]interface{}{
+		{
+			"address": outbound.Server,
+			"port":    outbound.Port,
+			"users": []map[string]interface{}{
+				{
+					"id":       outbound.UUID,
+					"security": outbound.Security,
+				},
+			},
+		},
+	}
+
+	config := OutboundConfig{
+		Tag:      outbound.Tag,
+		Protocol: "vmess",
+		Settings: map[string]interface{}{
+			"vnext": vnext,
+		},
+	}
+
+	config.StreamSettings = g.generateOutboundStreamSettings(outbound)
+	return config
+}
+
+// generateOutboundStreamSettings generates stream settings for outbounds
+func (g *Generator) generateOutboundStreamSettings(outbound models.Outbound) *StreamSettings {
+	// If no transport or security is configured, return nil
+	if outbound.Network == "" && !outbound.TLS && !outbound.Reality && outbound.TrojanNetwork == "" && outbound.TrojanSNI == "" {
+		return nil
+	}
+
+	streamSettings := &StreamSettings{
+		Network: "tcp",
+	}
+
+	// Determine network
+	network := outbound.Network
+	if network == "" && outbound.Type == models.OutboundTrojan {
+		network = outbound.TrojanNetwork
+	}
+	if network != "" {
+		streamSettings.Network = network
+	}
+
+	// Transport settings
+	switch streamSettings.Network {
+	case "ws":
+		streamSettings.WSSettings = &WSSettings{
+			Path: outbound.Path,
+		}
+		if outbound.RequestHost != "" {
+			streamSettings.WSSettings.Headers = map[string]string{
+				"Host": outbound.RequestHost,
+			}
+		}
+	case "grpc":
+		streamSettings.GRPCSettings = &GRPCSettings{
+			ServiceName: outbound.ServiceName,
+			MultiMode:   true,
+		}
+	case "xhttp":
+		streamSettings.XHTTPSettings = &XHTTPSettings{
+			Path: outbound.Path,
+			Host: outbound.RequestHost,
+			Mode: "auto",
+		}
+	}
+
+	// Security settings
+	if outbound.Reality {
+		streamSettings.Security = "reality"
+		streamSettings.RealitySettings = &RealitySettings{
+			Show:        false,
+			Fingerprint: "chrome",
+			ServerName:  outbound.RealitySNI,
+			PublicKey:   outbound.RealityPubKey,
+			ShortId:     outbound.RealityShortID,
+			SpiderX:     "/",
+		}
+	} else if outbound.TLS || outbound.Type == models.OutboundTrojan {
+		streamSettings.Security = "tls"
+		sni := outbound.TLSServerName
+		if sni == "" && outbound.Type == models.OutboundTrojan {
+			sni = outbound.TrojanSNI
+		}
+		streamSettings.TLSSettings = &TLSSettings{
+			ServerName: sni,
+		}
+		if outbound.TLSALPN != "" {
+			streamSettings.TLSSettings.ALPN = strings.Split(outbound.TLSALPN, ",")
+		}
+	}
+
+	return streamSettings
 }

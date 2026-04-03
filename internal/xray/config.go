@@ -65,7 +65,6 @@ type SystemPolicy struct {
 	StatsOutboundDownlink bool `json:"statsOutboundDownlink,omitempty"`
 }
 
-// Generator generates Xray configuration
 type Generator struct {
 	users     []models.User
 	inbounds  []models.Inbound
@@ -75,6 +74,7 @@ type Generator struct {
 	apiPort   int
 	logLevel  string
 	socketDir string
+	panelMode string
 }
 
 // NewGenerator creates a new configuration generator
@@ -136,6 +136,12 @@ func (g *Generator) SetSocketDir(dir string) *Generator {
 	return g
 }
 
+// SetPanelMode sets the working mode of the panel (server / client)
+func (g *Generator) SetPanelMode(mode string) *Generator {
+	g.panelMode = mode
+	return g
+}
+
 // Generate creates the complete Xray configuration
 func (g *Generator) Generate() (*Config, error) {
 	config := &Config{
@@ -145,13 +151,6 @@ func (g *Generator) Generate() (*Config, error) {
 		API: &APIConfig{
 			Tag:      "api",
 			Services: []string{"HandlerService", "LoggerService", "StatsService"},
-		},
-		DNS: &DNSConfig{
-			Servers: []interface{}{
-				"https+local://1.1.1.1/dns-query",
-				"https+local://8.8.8.8/dns-query",
-				"localhost",
-			},
 		},
 		Stats: &StatsConfig{},
 		Policy: &PolicyConfig{
@@ -174,8 +173,64 @@ func (g *Generator) Generate() (*Config, error) {
 		},
 	}
 
+	if g.panelMode == "client" {
+		config.DNS = g.generateDNSForClient()
+	} else {
+		config.DNS = &DNSConfig{
+			Servers: []interface{}{
+				"1.1.1.1",
+				"8.8.8.8",
+				"localhost",
+			},
+		}
+	}
+
 	// Generate API inbound
 	config.Inbounds = append(config.Inbounds, g.generateAPIInbound())
+
+	if g.panelMode == "client" {
+		config.Inbounds = append(config.Inbounds, InboundConfig{
+			Tag:      "dns-in",
+			Listen:   "127.0.0.1",
+			Port:     53,
+			Protocol: "dokodemo-door",
+			Settings: map[string]interface{}{
+				"address": "1.1.1.1",
+				"port":    53,
+				"network": "udp",
+			},
+		})
+
+		// Add SOCKS5 inbound
+		config.Inbounds = append(config.Inbounds, InboundConfig{
+			Tag:      "socks-in",
+			Listen:   "127.0.0.1",
+			Port:     10808,
+			Protocol: "socks",
+			Settings: map[string]interface{}{
+				"auth": "noauth",
+				"udp":  true,
+			},
+			Sniffing: &SniffingConfig{
+				Enabled:      true,
+				DestOverride: []string{"http", "tls", "quic", "fakedns"},
+				RouteOnly:    true,
+			},
+		})
+
+		// Add HTTP inbound
+		config.Inbounds = append(config.Inbounds, InboundConfig{
+			Tag:      "http-in",
+			Listen:   "127.0.0.1",
+			Port:     10809,
+			Protocol: "http",
+			Sniffing: &SniffingConfig{
+				Enabled:      true,
+				DestOverride: []string{"http", "tls", "quic", "fakedns"},
+				RouteOnly:    true,
+			},
+		})
+	}
 
 	// Generate proxy inbounds
 	for _, inbound := range g.inbounds {
@@ -192,10 +247,46 @@ func (g *Generator) Generate() (*Config, error) {
 	// Generate outbounds
 	config.Outbounds = g.generateOutbounds()
 
+	if g.panelMode == "client" {
+		config.Outbounds = append(config.Outbounds, OutboundConfig{
+			Protocol: "dns",
+			Tag:      "dns-out",
+		})
+	}
+
 	// Generate routing
 	config.Routing = g.generateRouting()
 
 	return config, nil
+}
+
+// generateDNSForClient generates comprehensive anti-poison DNS arrays needed for the proxy client
+func (g *Generator) generateDNSForClient() *DNSConfig {
+	return &DNSConfig{
+		Servers: []interface{}{
+			// Remote DNS (Anti-poison) - Use tcp:// to ensure it goes through ROUTING and thus PROXY
+			map[string]interface{}{
+				"address": "tcp://1.1.1.1",
+				"domains": []string{
+					"geosite:geolocation-!cn",
+				},
+				"expectIPs": []string{
+					"geoip:!cn",
+				},
+			},
+			// Domestic DNS - Use DOHL (https+local) to BYPASS ROUTING for better performance
+			map[string]interface{}{
+				"address": "https+local://223.5.5.5/dns-query",
+				"domains": []string{
+					"geosite:cn",
+				},
+				"expectIPs": []string{
+					"geoip:cn",
+				},
+			},
+			"localhost",
+		},
+	}
 }
 
 // GenerateJSON generates the configuration as JSON

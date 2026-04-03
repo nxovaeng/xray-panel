@@ -16,6 +16,8 @@ const (
 	OutboundWireGuard OutboundType = "wireguard" // WireGuard (WARP, Proton VPN 等)
 	OutboundTrojan    OutboundType = "trojan"    // Trojan (自己的其他服务器，落地IP用途)
 	OutboundBlackhole OutboundType = "blackhole" // Block traffic
+	OutboundVLESS     OutboundType = "vless"     // VLESS (Modern proxy)
+	OutboundVMess     OutboundType = "vmess"     // VMess (Classic proxy)
 )
 
 // Outbound represents an Xray outbound configuration
@@ -44,6 +46,27 @@ type Outbound struct {
 	TrojanPassword string `json:"-" form:"trojan_password"`             // Trojan password
 	TrojanSNI      string `json:"trojan_sni" form:"trojan_sni"`         // Server Name Indication
 	TrojanNetwork  string `json:"trojan_network" form:"trojan_network"` // tcp/ws/grpc
+
+	// VLESS / VMess settings
+	UUID     string `json:"uuid" form:"uuid"`
+	Flow     string `json:"flow" form:"flow"`         // VLESS only
+	Security string `json:"security" form:"security"` // VMess only: auto, aes-128-gcm, etc.
+
+	// Transport settings
+	Network     string `json:"network" form:"network"`           // tcp, ws, grpc, xhttp
+	HeaderType  string `json:"header_type" form:"header_type"`   // none, http, etc.
+	RequestHost string `json:"request_host" form:"request_host"` // host header
+	Path        string `json:"path" form:"path"`                 // path for ws/grpc/xhttp
+	ServiceName string `json:"service_name" form:"service_name"` // for grpc
+
+	// TLS / Reality settings
+	TLS            bool   `json:"tls" form:"tls"`
+	TLSServerName  string `json:"tls_server_name" form:"tls_server_name"`
+	TLSALPN        string `json:"tls_alpn" form:"tls_alpn"`
+	Reality        bool   `json:"reality" form:"reality"`
+	RealityPubKey  string `json:"reality_pubkey" form:"reality_pubkey"`
+	RealityShortID string `json:"reality_short_id" form:"reality_short_id"`
+	RealitySNI     string `json:"reality_sni" form:"reality_sni"`
 
 	Enabled   bool      `json:"enabled" form:"enabled" gorm:"default:true"`
 	Priority  int       `json:"priority" form:"priority" gorm:"default:0"` // Higher = preferred
@@ -86,4 +109,14 @@ func (o *Outbound) IsSOCKS5() bool {
 // IsBlackhole returns true if this is a blackhole outbound
 func (o *Outbound) IsBlackhole() bool {
 	return o.Type == OutboundBlackhole
+}
+
+// IsVLESS returns true if this is a VLESS outbound
+func (o *Outbound) IsVLESS() bool {
+	return o.Type == OutboundVLESS
+}
+
+// IsVMess returns true if this is a VMess outbound
+func (o *Outbound) IsVMess() bool {
+	return o.Type == OutboundVMess
 }

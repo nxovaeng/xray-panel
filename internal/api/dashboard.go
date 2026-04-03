@@ -218,6 +218,12 @@ func (s *Server) generateXrayConfig() ([]byte, error) {
 	s.db.Where("enabled = ?", true).Order("priority ASC").Find(&rules)
 	s.db.Where("enabled = ?", true).Find(&domains)
 
+	var modeSetting models.Setting
+	panelMode := "server"
+	if err := s.db.First(&modeSetting, "key = ?", "panel_mode").Error; err == nil {
+		panelMode = modeSetting.Value
+	}
+
 	generator := xray.NewGenerator()
 	generator.SetUsers(users)
 	generator.SetInbounds(inbounds)
@@ -226,6 +232,7 @@ func (s *Server) generateXrayConfig() ([]byte, error) {
 	generator.SetDomains(domains)
 	generator.SetAPIPort(s.config.Xray.APIPort)
 	generator.SetSocketDir(s.config.Xray.SocketDir)
+	generator.SetPanelMode(panelMode)
 
 	return generator.GenerateJSON()
 }

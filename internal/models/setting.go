@@ -25,6 +25,7 @@ func (s *Setting) BeforeSave(tx *gorm.DB) error {
 func DefaultSettings() []Setting {
 	return []Setting{
 		{Key: "panel_title", Value: "Xray Panel", Type: "string", Remark: "Panel title"},
+		{Key: "panel_mode", Value: "server", Type: "string", Remark: "Panel working mode (server / client)"},
 		{Key: "sub_domain", Value: "", Type: "string", Remark: "Subscription domain"},
 		{Key: "sub_path", Value: "/sub", Type: "string", Remark: "Subscription URL path prefix"},
 		{Key: "xray_log_level", Value: "warning", Type: "string", Remark: "Xray log level"},

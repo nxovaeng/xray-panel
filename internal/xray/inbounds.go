@@ -45,11 +45,16 @@ type TLSCert struct {
 // RealitySettings represents Reality protocol settings
 type RealitySettings struct {
 	Show        bool     `json:"show,omitempty"`
-	Dest        string   `json:"dest"`
+	Dest        string   `json:"dest,omitempty"`
 	Xver        int      `json:"xver,omitempty"`
-	ServerNames []string `json:"serverNames"`
-	PrivateKey  string   `json:"privateKey"`
-	ShortIds    []string `json:"shortIds"`
+	ServerNames []string `json:"serverNames,omitempty"` // For inbound
+	ServerName  string   `json:"serverName,omitempty"`  // For outbound
+	PrivateKey  string   `json:"privateKey,omitempty"`  // For inbound
+	PublicKey   string   `json:"publicKey,omitempty"`   // For outbound
+	ShortIds    []string `json:"shortIds,omitempty"`    // For inbound
+	ShortId     string   `json:"shortId,omitempty"`     // For outbound
+	Fingerprint string   `json:"fingerprint,omitempty"`
+	SpiderX     string   `json:"spiderX,omitempty"`
 }
 
 // XHTTPSettings represents XHTTP transport settings
