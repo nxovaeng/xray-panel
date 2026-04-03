@@ -4,8 +4,8 @@
 
 ### Windows
 ```cmd
-# 构建所有平台
-scripts\build-all.bat v1.0.0
+# 使用 Makefile 构建 Windows 版本（需安装 Make）
+make build-windows VERSION=v1.0.0
 
 # 或使用 Go 命令直接构建当前平台
 go build -o panel.exe ./cmd/panel
@@ -13,11 +13,7 @@ go build -o panel.exe ./cmd/panel
 
 ### Linux/macOS
 ```bash
-# 构建所有平台
-chmod +x scripts/build-all.sh
-./scripts/build-all.sh v1.0.0
-
-# 或使用 Makefile
+# 使用 Makefile 构建所有平台
 make build-all VERSION=v1.0.0
 
 # 或构建当前平台
@@ -68,4 +64,4 @@ sha256sum -c panel-linux-amd64.sha256
 
 ## 更多信息
 
-详细文档请参考：`docs/building.md`
+构建规则详见 `Makefile` 源文件。

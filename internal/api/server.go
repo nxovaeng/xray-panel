@@ -111,6 +111,7 @@ func (s *Server) setupRoutes() {
 
 		// Outbound forms
 		forms.GET("/outbounds/new", s.webHandler.NewOutboundForm)
+		forms.GET("/outbounds/import", s.webHandler.ImportOutboundForm)
 		forms.GET("/outbounds/:id/edit", s.webHandler.EditOutboundForm)
 
 		// Routing forms
@@ -154,6 +155,7 @@ func (s *Server) setupRoutes() {
 
 		// Outbounds
 		api.GET("/outbounds/table", s.webHandler.OutboundsTable)
+		api.POST("/outbounds/import", s.webHandler.ImportShareLink)
 		api.POST("/outbounds", s.webHandler.CreateOutbound)
 		api.POST("/outbounds/:id", s.webHandler.UpdateOutbound)
 		api.DELETE("/outbounds/:id", s.webHandler.DeleteOutbound)

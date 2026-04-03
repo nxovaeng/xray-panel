@@ -15,6 +15,7 @@ import (
 	"xray-panel/internal/models"
 	"xray-panel/internal/nginx"
 	"xray-panel/internal/system"
+	"xray-panel/internal/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -754,6 +755,37 @@ func (h *Handler) OutboundsTable(c *gin.Context) {
 
 func (h *Handler) NewOutboundForm(c *gin.Context) {
 	c.HTML(http.StatusOK, "components/outbound-form.html", nil)
+}
+
+func (h *Handler) ImportOutboundForm(c *gin.Context) {
+	c.HTML(http.StatusOK, "components/import-outbound-form.html", nil)
+}
+
+func (h *Handler) ImportShareLink(c *gin.Context) {
+	link := c.PostForm("link")
+	if link == "" {
+		c.String(http.StatusBadRequest, "链接不能为空")
+		return
+	}
+
+	outbound, err := utils.ParseShareLink(link)
+	if err != nil {
+		logger.Error("解析分享链接失败: %v", err)
+		c.String(http.StatusBadRequest, "解析失败: "+err.Error())
+		return
+	}
+
+	outbound.CreatedAt = time.Now()
+	outbound.UpdatedAt = time.Now()
+
+	if err := h.db.Create(&outbound).Error; err != nil {
+		logger.Error("导入出站失败: %v", err)
+		c.String(http.StatusInternalServerError, "保存记录失败: "+err.Error())
+		return
+	}
+
+	logger.Info("导入出站成功: %s", outbound.Tag)
+	h.OutboundsTable(c)
 }
 
 func (h *Handler) EditOutboundForm(c *gin.Context) {

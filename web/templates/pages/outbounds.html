@@ -44,9 +44,14 @@
 <div class="content-page">
     <div class="page-header">
         <h1>出站管理</h1>
-        <button hx-get="/outbounds/new" hx-target="#modal-body" onclick="openModal('添加出站')" class="btn btn-primary">
-            <i data-lucide="plus"></i> 添加出站
-        </button>
+        <div style="display: flex; gap: 1rem;">
+            <button hx-get="/outbounds/import" hx-target="#modal-body" onclick="openModal('导入节点')" class="btn btn-outline" style="border-color: rgba(99, 102, 241, 0.5); color: var(--accent);">
+                <i data-lucide="link"></i> 导入分享链接
+            </button>
+            <button hx-get="/outbounds/new" hx-target="#modal-body" onclick="openModal('添加出站')" class="btn btn-primary">
+                <i data-lucide="plus"></i> 添加出站
+            </button>
+        </div>
     </div>
 
     <div class="table-container">
