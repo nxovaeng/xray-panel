@@ -106,6 +106,7 @@ show_menu() {
     echo -e "${GREEN}18.${PLAIN} 查看 Xray 日志"
     echo -e "${GREEN}23.${PLAIN} 更新 Xray-core"
     echo -e "${GREEN}24.${PLAIN} 申请 WARP WireGuard 配置"
+    echo -e "${GREEN}25.${PLAIN} 更新管理脚本"
     echo " ————————————————"
     echo -e "${GREEN}19.${PLAIN} 配置 Nginx 反向代理"
     echo " ————————————————"
@@ -114,7 +115,7 @@ show_menu() {
     echo -e "${GREEN}22.${PLAIN} 清理日志"
     echo " ————————————————"
     echo ""
-    read -p "请输入选择 [0-24]: " choice
+    read -p "请输入选择 [0-25]: " choice
     echo ""
 }
 
@@ -141,6 +142,11 @@ update_panel() {
     
     # 下载并执行在线安装脚本
     bash <(curl -Ls "https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/update.sh")
+
+    # update.sh 已经处理了管理脚本的更新
+    # 如果当前脚本是通过软链接运行的，重新加载提示
+    echo ""
+    echo -e "${YELLOW}[INFO]${PLAIN} 管理脚本已更新，如需使用新功能请重新运行 xray-panel"
 }
 
 # 3. 卸载
@@ -607,7 +613,32 @@ clean_logs() {
     echo -e "${GREEN}[SUCCESS]${PLAIN} 日志清理完成"
 }
 
-# 主循环
+# 25. 仅更新管理脚本
+update_management_script() {
+    echo -e "${BLUE}[INFO]${PLAIN} 从 GitHub 拉取最新管理脚本..."
+
+    local script_url="https://raw.githubusercontent.com/$GITHUB_REPO/master/xray-panel.sh"
+    local tmp_script=$(mktemp)
+
+    if curl -fsSL "$script_url" -o "$tmp_script"; then
+        if head -1 "$tmp_script" | grep -q '^#!'; then
+            cp "$tmp_script" "$INSTALL_DIR/xray-panel.sh"
+            chmod +x "$INSTALL_DIR/xray-panel.sh"
+            ln -sf "$INSTALL_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
+            chmod +x /usr/local/bin/xray-panel.sh
+            ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
+            rm -f "$tmp_script"
+            echo -e "${GREEN}[SUCCESS]${PLAIN} 管理脚本已更新"
+            echo -e "${YELLOW}[INFO]${PLAIN} 请重新运行 xray-panel 以使用新版本"
+            exit 0  # 退出当前进程，让用户重新运行新脚本
+        else
+            echo -e "${RED}[ERROR]${PLAIN} 下载的脚本格式异常"
+        fi
+    else
+        echo -e "${RED}[ERROR]${PLAIN} 下载失败，请检查网络连接"
+    fi
+    rm -f "$tmp_script"
+}
 main() {
     check_root
     
@@ -644,6 +675,7 @@ main() {
             22) clean_logs ;;
             23) update_xray ;;
             24) get_warp_config ;;
+            25) update_management_script ;;
             *)
                 echo -e "${RED}无效的选择${PLAIN}"
                 ;;

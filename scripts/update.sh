@@ -180,6 +180,29 @@ install_dependencies() {
     fi
 }
     
+# 从 GitHub 拉取最新管理脚本（兜底方案）
+update_management_script_from_github() {
+    local script_url="https://raw.githubusercontent.com/$GITHUB_REPO/master/xray-panel.sh"
+    local tmp_script=$(mktemp)
+
+    if curl -fsSL "$script_url" -o "$tmp_script" 2>/dev/null; then
+        # 验证下载的是 shell 脚本
+        if head -1 "$tmp_script" | grep -q '^#!'; then
+            cp "$tmp_script" "$INSTALL_DIR/xray-panel.sh"
+            chmod +x "$INSTALL_DIR/xray-panel.sh"
+            ln -sf "$INSTALL_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
+            chmod +x /usr/local/bin/xray-panel.sh
+            ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
+            log_success "管理脚本已从 GitHub 更新"
+        else
+            log_warning "下载的管理脚本格式异常，跳过更新"
+        fi
+    else
+        log_warning "从 GitHub 拉取管理脚本失败，跳过"
+    fi
+    rm -f "$tmp_script"
+}
+
 stop_panel() {
     log_info "停止面板服务..."
     
@@ -250,6 +273,10 @@ download_new_version() {
                 ln -sf "$INSTALL_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
                 chmod +x /usr/local/bin/xray-panel.sh
                 ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
+                log_success "管理脚本已更新"
+            else
+                log_warning "release 包中未找到管理脚本，尝试从 GitHub 拉取最新版..."
+                update_management_script_from_github
             fi
             
             log_success "新版本已安装"
