@@ -172,7 +172,7 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 	// Nginx 到 Xray 的连接是 none（内部通信）
 	params.Set("security", "tls")
 	params.Set("sni", sniDomain) // SNI 使用反代子域名
-	params.Set("alpn", "h2,http/1.1")
+	params.Set("alpn", "h2")
 	params.Set("fp", "chrome")
 
 	// Transport settings
@@ -182,16 +182,8 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 		if inbound.Host != "" {
 			params.Set("host", inbound.Host)
 		}
-		// 客户端 mode 根据场景自动选择：
-		// - 过 Nginx/CDN (TLS H2)：stream-one（官方推荐，比 auto 更稳，避免断流）
-		// - 直连 Reality：auto（等同 stream-one）
-		// ConnectDomain 非空说明是 CDN/Nginx 反代场景
-		clientMode := "auto"
-		if inbound.ConnectDomain != "" {
-			// CDN 场景：明确指定 stream-one，避免 auto 选到 stream-up 导致断流
-			clientMode = "stream-one"
-		}
-		params.Set("mode", clientMode)
+		// 客户端 mode 使用 auto
+		params.Set("mode", "auto")
 
 	case models.TransportGRPC:
 		params.Set("serviceName", inbound.ServiceName)

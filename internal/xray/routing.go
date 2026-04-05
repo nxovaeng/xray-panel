@@ -67,15 +67,9 @@ func (g *Generator) generateRouting() *RoutingConfig {
 			OutboundTag: "direct",
 		})
 
-		// Local DNS (AliDNS) -> Direct
-		routing.Rules = append(routing.Rules, RoutingRule{
-			Type:        "field",
-			IP:          []string{"223.5.5.5", "223.6.6.6"},
-			OutboundTag: "direct",
-		})
-
 		// Handle specific client routing modes
-		if g.clientRoutingMode == "white" {
+		switch g.clientRoutingMode {
+		case "white":
 			routing.Rules = append(routing.Rules, getWhiteRoutingRules()...)
 			// White mode needs a proxy catch-all at the end
 			routing.Rules = append(routing.Rules, RoutingRule{
@@ -84,7 +78,7 @@ func (g *Generator) generateRouting() *RoutingConfig {
 				OutboundTag: proxyTag,
 			})
 			return routing
-		} else if g.clientRoutingMode == "black" {
+		case "black":
 			routing.Rules = append(routing.Rules, getBlackRoutingRules()...)
 			// Black mode unmatched traffic naturally goes to "direct" because it's first in outbounds,
 			// but we append a catch-all direct rule for safety
@@ -94,8 +88,12 @@ func (g *Generator) generateRouting() *RoutingConfig {
 				OutboundTag: "direct",
 			})
 			return routing
+		case "custom":
+			// Custom mode: process g.rules
+		default:
+			// Default to custom mode if unknown
+			g.clientRoutingMode = "custom"
 		}
-		// If "custom", fall back to processing g.rules below
 	}
 
 	// Sort rules by priority

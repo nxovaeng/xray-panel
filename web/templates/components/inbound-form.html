@@ -57,14 +57,6 @@
 
         <!-- WebSocket / XHTTP Fields -->
         <div id="ws-xhttp-fields" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "ws") (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
-            <div class="form-group" id="xhttp-mode-field" style="display: {{if or (not .Inbound) (eq .Inbound.Transport "xhttp")}}block{{else}}none{{end}};">
-                <div style="padding: 0.75rem 1rem; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 0.5rem; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.6;">
-                    <strong style="color: var(--accent);">服务端 mode 固定为 auto</strong>，接受客户端所有上传模式。<br>
-                    · 设置了<strong>连接目标域名</strong>（CDN/Nginx 反代）→ 客户端使用 <code>stream-one</code><br>
-                    · 未设置连接目标域名（直连）→ 客户端使用 <code>auto</code>（等同 stream-one）<br>
-                    <span style="color: var(--warning);">⚠ stream-one 需要 Nginx 使用 <code>proxy_pass</code>（已自动生成），或 CF 开启 gRPC 支持。</span>
-                </div>
-            </div>
 
             <div class="form-group">
                 <label for="path">路径</label>
@@ -261,18 +253,13 @@
     function toggleTransportFields(transport) {
         const wsXhttpFields = document.getElementById('ws-xhttp-fields');
         const grpcFields = document.getElementById('grpc-fields');
-        const xhttpModeField = document.getElementById('xhttp-mode-field');
 
         if (transport === 'grpc') {
             wsXhttpFields.style.display = 'none';
             grpcFields.style.display = 'block';
-            if (xhttpModeField) xhttpModeField.style.display = 'none';
         } else {
             wsXhttpFields.style.display = 'block';
             grpcFields.style.display = 'none';
-            if (xhttpModeField) {
-                xhttpModeField.style.display = transport === 'xhttp' ? 'block' : 'none';
-            }
         }
     }
 
