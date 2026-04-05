@@ -2,6 +2,7 @@ package xray
 
 import (
 	"fmt"
+	"strings"
 
 	"xray-panel/internal/models"
 )
@@ -224,7 +225,18 @@ func (g *Generator) generateWireGuardInbound(inbound models.Inbound) (*InboundCo
 
 	localIP := inbound.WGLocalIP
 	if localIP == "" {
-		localIP = "10.0.0.1/24"
+		localIP = "10.0.0.1"
+	}
+
+	// Xray requires the interface address to be /32 for IPv4 and /128 for IPv6.
+	// We strip any user-provided subnet and append the correct one.
+	if idx := strings.Index(localIP, "/"); idx != -1 {
+		localIP = localIP[:idx]
+	}
+	if strings.Contains(localIP, ":") {
+		localIP = localIP + "/128"
+	} else {
+		localIP = localIP + "/32"
 	}
 
 	settings := map[string]interface{}{
@@ -236,8 +248,7 @@ func (g *Generator) generateWireGuardInbound(inbound models.Inbound) (*InboundCo
 				"allowedIPs": []string{"0.0.0.0/0", "::/0"},
 			},
 		},
-		"mtu":            mtu,
-		"noKernelTun":    true, // Xray WireGuard 使用用户态实现，无需内核模块
+		"mtu": mtu,
 	}
 
 	listen := inbound.Listen

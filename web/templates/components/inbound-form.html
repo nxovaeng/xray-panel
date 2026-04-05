@@ -144,8 +144,8 @@
         <div class="form-group">
             <label for="wg_local_ip">本端虚拟 IP</label>
             <input type="text" id="wg_local_ip" name="wg_local_ip"
-                value="{{if .Inbound}}{{.Inbound.WGLocalIP}}{{end}}" placeholder="10.0.0.1/24">
-            <small class="form-hint">WireGuard 隧道内的本端 IP，与对端不能相同（如对端用 10.0.0.2/24）</small>
+                value="{{if .Inbound}}{{.Inbound.WGLocalIP}}{{end}}" placeholder="10.0.0.1/32">
+            <small class="form-hint">WireGuard 隧道内的本端 IP，与对端不能相同（后端会自动转换为 /32 或 /128 以适配 Xray）</small>
         </div>
 
         <div class="form-group">
