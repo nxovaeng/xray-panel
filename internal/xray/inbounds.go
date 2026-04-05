@@ -177,7 +177,7 @@ func (g *Generator) generateVLESSSettings() map[string]interface{} {
 		client := map[string]interface{}{
 			"id":    user.UUID,
 			"flow":  "",
-			"email": user.Email,
+			"email": user.StatsKey(), // 用稳定的 stats key，不依赖可选的 Email 字段
 			"level": 0,
 		}
 		clients = append(clients, client)
@@ -195,7 +195,7 @@ func (g *Generator) generateTrojanSettings() map[string]interface{} {
 	for _, user := range g.getActiveUsers() {
 		client := map[string]interface{}{
 			"password": user.UUID,
-			"email":    user.Email,
+			"email":    user.StatsKey(), // 用稳定的 stats key，不依赖可选的 Email 字段
 			"level":    0,
 		}
 		clients = append(clients, client)

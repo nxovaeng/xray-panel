@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"xray-panel/internal/models"
 )
@@ -29,58 +28,14 @@ type UpdateUserRequest struct {
 	Note         string `json:"note"`
 }
 
-// handleListUsers returns all users
-func (s *Server) handleListUsers(c *gin.Context) {
-	var users []models.User
-	if err := s.db.Order("created_at DESC").Find(&users).Error; err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to fetch users")
-		return
-	}
-	jsonOK(c, users)
-}
-
-// handleCreateUser creates a new user
-func (s *Server) handleCreateUser(c *gin.Context) {
-	var req CreateUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		jsonError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
-		return
-	}
-
-	user := models.User{
-		ID:           uuid.New().String(),
-		UUID:         uuid.New().String(),
-		Name:         req.Name,
-		Email:        req.Email,
-		TrafficLimit: req.TrafficLimit,
-		Enabled:      true,
-		SubPath:      uuid.New().String()[:8],
-		Note:         req.Note,
-	}
-
-	// Set expiry date if specified
-	if req.ExpireDays > 0 {
-		user.ExpiryDate = time.Now().AddDate(0, 0, req.ExpireDays)
-	}
-
-	if err := s.db.Create(&user).Error; err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to create user")
-		return
-	}
-
-	jsonCreated(c, user)
-}
-
-// handleGetUser returns a single user
+// handleGetUser returns a single user as JSON (used by edit forms)
 func (s *Server) handleGetUser(c *gin.Context) {
 	id := c.Param("id")
-
 	var user models.User
 	if err := s.db.First(&user, "id = ?", id).Error; err != nil {
 		jsonError(c, http.StatusNotFound, "User not found")
 		return
 	}
-
 	jsonOK(c, user)
 }
 
@@ -100,7 +55,6 @@ func (s *Server) handleUpdateUser(c *gin.Context) {
 		return
 	}
 
-	// Update fields
 	if req.Name != "" {
 		user.Name = req.Name
 	}
@@ -111,7 +65,6 @@ func (s *Server) handleUpdateUser(c *gin.Context) {
 	user.Enabled = req.Enabled
 	user.Note = req.Note
 
-	// Parse expiry date
 	if req.ExpiryDate != "" {
 		expiryDate, err := time.Parse(time.RFC3339, req.ExpiryDate)
 		if err == nil {
@@ -144,7 +97,7 @@ func (s *Server) handleDeleteUser(c *gin.Context) {
 	jsonOK(c, gin.H{"deleted": true})
 }
 
-// handleResetUserTraffic resets a user's traffic usage
+// handleResetUserTraffic resets a user's traffic usage to zero
 func (s *Server) handleResetUserTraffic(c *gin.Context) {
 	id := c.Param("id")
 

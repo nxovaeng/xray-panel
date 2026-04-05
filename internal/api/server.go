@@ -198,6 +198,7 @@ func (s *Server) setupRoutes() {
 	}
 
 	// API routes - protected (require session auth)
+	// 所有 /api/* 接口均通过 session cookie 认证，供 Web UI (HTMX) 调用
 	api := s.router.Group("/api")
 	api.Use(s.webAuthMiddleware())
 	{
@@ -205,14 +206,19 @@ func (s *Server) setupRoutes() {
 		api.GET("/dashboard/stats", s.webHandler.DashboardStats)
 
 		// Users
+		// /users/table、/users/search 返回 HTML 片段（HTMX）
+		// /users/:id (GET) 返回 JSON，供表单回显
 		api.GET("/users/table", s.webHandler.UsersTable)
 		api.GET("/users/search", s.webHandler.SearchUsers)
+		api.GET("/users/:id", s.handleGetUser)
 		api.POST("/users", s.webHandler.CreateUser)
 		api.POST("/users/:id", s.webHandler.UpdateUser)
+		api.POST("/users/:id/reset-traffic", s.handleResetUserTraffic)
 		api.DELETE("/users/:id", s.webHandler.DeleteUser)
 
 		// Inbounds
 		api.GET("/inbounds/table", s.webHandler.InboundsTable)
+		api.GET("/inbounds/:id", s.handleGetInbound)
 		api.POST("/inbounds", s.webHandler.CreateInbound)
 		api.POST("/inbounds/:id", s.webHandler.UpdateInbound)
 		api.POST("/inbounds/:id/toggle", s.webHandler.ToggleInbound)
@@ -220,7 +226,9 @@ func (s *Server) setupRoutes() {
 
 		// Outbounds
 		api.GET("/outbounds/table", s.webHandler.OutboundsTable)
+		api.GET("/outbounds/:id", s.handleGetOutbound)
 		api.POST("/outbounds/import", s.webHandler.ImportShareLink)
+		api.POST("/outbounds/parse-wireguard", s.handleParseWireGuardConfig)
 		api.POST("/outbounds/generate-wg-keys", s.handleGenerateWGKeys)
 		api.POST("/outbounds", s.webHandler.CreateOutbound)
 		api.POST("/outbounds/:id", s.webHandler.UpdateOutbound)
@@ -230,21 +238,23 @@ func (s *Server) setupRoutes() {
 
 		// Routing
 		api.GET("/routing/table", s.webHandler.RoutingTable)
+		api.GET("/routing/geodata", s.handleGetGeoData)
+		api.POST("/routing/preset/:preset", s.handleImportPresetRules)
 		api.POST("/routing", s.webHandler.CreateRouting)
 		api.POST("/routing/:id", s.webHandler.UpdateRouting)
 		api.POST("/routing/:id/toggle", s.webHandler.ToggleRouting)
 		api.DELETE("/routing/:id", s.webHandler.DeleteRouting)
-		api.POST("/routing/preset/:preset", s.handleImportPresetRules)
-		api.GET("/routing/geodata", s.handleGetGeoData)
 
 		// Domains
 		api.GET("/domains/table", s.webHandler.DomainsTable)
+		api.GET("/domains/scan-certs", s.handleScanCertificates)
 		api.POST("/domains/scan-import", s.handleScanAndImportCertificates)
+		api.POST("/domains/import-cert", s.handleImportSingleCert)
 		api.POST("/domains", s.webHandler.CreateDomain)
 		api.POST("/domains/:id", s.webHandler.UpdateDomain)
 		api.DELETE("/domains/:id", s.webHandler.DeleteDomain)
 
-		// Xray control (protected)
+		// Xray control
 		api.GET("/xray/status", s.handleXrayStatus)
 		api.POST("/xray/restart", s.handleXrayRestart)
 		api.GET("/xray/config", s.handleGetXrayConfig)
@@ -253,97 +263,6 @@ func (s *Server) setupRoutes() {
 		// Settings
 		api.GET("/settings", s.handleGetSettings)
 		api.PUT("/settings", s.handleUpdateSettings)
-	}
-
-	// Legacy API v1 routes (keep for backward compatibility)
-	v1 := s.router.Group("/api/v1")
-	{
-		// Public routes
-		v1.POST("/login", s.handleLogin)
-		v1.GET("/health", s.handleHealth)
-
-		// Protected routes (require JWT)
-		protected := v1.Group("")
-		protected.Use(s.authMiddleware())
-		{
-			// Dashboard
-			protected.GET("/dashboard", s.handleDashboard)
-
-			// Users management
-			users := protected.Group("/users")
-			{
-				users.GET("", s.handleListUsers)
-				users.POST("", s.handleCreateUser)
-				users.GET("/:id", s.handleGetUser)
-				users.PUT("/:id", s.handleUpdateUser)
-				users.DELETE("/:id", s.handleDeleteUser)
-				users.POST("/:id/reset-traffic", s.handleResetUserTraffic)
-			}
-
-			// Inbounds management
-			inbounds := protected.Group("/inbounds")
-			{
-				inbounds.GET("", s.handleListInbounds)
-				inbounds.POST("", s.handleCreateInbound)
-				inbounds.GET("/:id", s.handleGetInbound)
-				inbounds.PUT("/:id", s.handleUpdateInbound)
-				inbounds.DELETE("/:id", s.handleDeleteInbound)
-			}
-
-			// Outbounds management
-			outbounds := protected.Group("/outbounds")
-			{
-				outbounds.GET("", s.handleListOutbounds)
-				outbounds.POST("", s.handleCreateOutbound)
-				// Static routes must come before parameterized routes
-				outbounds.POST("/parse-wireguard", s.handleParseWireGuardConfig)
-				outbounds.POST("/generate-wg-keys", s.handleGenerateWGKeys)
-				// Parameterized routes
-				outbounds.GET("/:id", s.handleGetOutbound)
-				outbounds.PUT("/:id", s.handleUpdateOutbound)
-				outbounds.DELETE("/:id", s.handleDeleteOutbound)
-				outbounds.POST("/:id/test", s.handleTestOutbound)
-				outbounds.POST("/:id/toggle", s.webHandler.ToggleOutbound)
-			}
-
-			// Routing rules
-			routing := protected.Group("/routing")
-			{
-				routing.GET("", s.handleListRoutingRules)
-				routing.POST("", s.handleCreateRoutingRule)
-				routing.PUT("/:id", s.handleUpdateRoutingRule)
-				routing.DELETE("/:id", s.handleDeleteRoutingRule)
-				routing.POST("/:id/toggle", s.webHandler.ToggleRouting)
-				routing.GET("/geodata", s.handleGetGeoData)
-			}
-
-			// Domains management
-			domains := protected.Group("/domains")
-			{
-				domains.GET("", s.handleListDomains)
-				domains.GET("/scan-certs", s.handleScanCertificates)
-				domains.POST("/scan-import", s.handleScanAndImportCertificates)
-				domains.POST("", s.handleCreateDomain)
-				domains.PUT("/:id", s.handleUpdateDomain)
-				domains.DELETE("/:id", s.handleDeleteDomain)
-			}
-
-			// Logout
-			protected.POST("/logout", s.handleLogout)
-
-			// Settings
-			protected.GET("/settings", s.handleGetSettings)
-			protected.PUT("/settings", s.handleUpdateSettings)
-
-			// Xray control
-			xray := protected.Group("/xray")
-			{
-				xray.GET("/status", s.handleXrayStatus)
-				xray.POST("/restart", s.handleXrayRestart)
-				xray.GET("/config", s.handleGetXrayConfig)
-				xray.POST("/apply", s.handleApplyXrayConfig)
-			}
-		}
 	}
 
 	// Subscription routes (public, rate-limited)

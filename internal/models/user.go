@@ -50,6 +50,13 @@ func generateSubPath(length int) string {
 	return string(b)
 }
 
+// StatsKey returns the stable identifier used as Xray stats email key.
+// Uses ID (always present) rather than Email (optional) to guarantee
+// traffic stats are recorded for every user.
+func (u *User) StatsKey() string {
+	return u.ID
+}
+
 // IsActive checks if user is enabled and not expired
 func (u *User) IsActive() bool {
 	if !u.Enabled {

@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,120 +11,11 @@ import (
 	"xray-panel/internal/models"
 )
 
-// LoginRequest represents login credentials
-type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
-}
-
-// LoginResponse contains the JWT token
-type LoginResponse struct {
-	Token     string `json:"token"`
-	ExpiresAt int64  `json:"expires_at"`
-}
-
 // Claims represents JWT claims
 type Claims struct {
 	AdminID  string `json:"admin_id"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
-}
-
-// handleLogin authenticates admin and returns JWT
-func (s *Server) handleLogin(c *gin.Context) {
-	var req LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		jsonError(c, http.StatusBadRequest, "Invalid request")
-		return
-	}
-
-	// Rate limiting
-	if !loginLimiter.allow(c.ClientIP()) {
-		jsonError(c, http.StatusTooManyRequests, "Too many login attempts, try again later")
-		return
-	}
-
-	// Find admin by username
-	var admin models.Admin
-	if err := s.db.Where("username = ?", req.Username).First(&admin).Error; err != nil {
-		jsonError(c, http.StatusUnauthorized, "Invalid credentials")
-		return
-	}
-
-	// Verify password
-	if !admin.CheckPassword(req.Password) {
-		jsonError(c, http.StatusUnauthorized, "Invalid credentials")
-		return
-	}
-
-	// Generate JWT token
-	expiresAt := time.Now().Add(time.Duration(s.config.JWT.ExpireHour) * time.Hour)
-	claims := &Claims{
-		AdminID:  admin.ID,
-		Username: admin.Username,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "xray-panel",
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(s.config.JWT.Secret))
-	if err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to generate token")
-		return
-	}
-
-	jsonOK(c, LoginResponse{
-		Token:     tokenString,
-		ExpiresAt: expiresAt.Unix(),
-	})
-}
-
-// authMiddleware validates JWT tokens (supports both Bearer token and cookie)
-func (s *Server) authMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var tokenString string
-
-		// Try to get token from Authorization header first
-		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" {
-			// Extract token from "Bearer <token>"
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) == 2 && parts[0] == "Bearer" {
-				tokenString = parts[1]
-			}
-		}
-
-		// If no Authorization header, try to get token from cookie
-		if tokenString == "" {
-			var err error
-			tokenString, err = c.Cookie("session_token")
-			if err != nil || tokenString == "" {
-				jsonError(c, http.StatusUnauthorized, "Authorization required")
-				c.Abort()
-				return
-			}
-		}
-
-		// Parse and validate token
-		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(s.config.JWT.Secret), nil
-		})
-
-		if err != nil || !token.Valid {
-			jsonError(c, http.StatusUnauthorized, "Invalid or expired token")
-			c.Abort()
-			return
-		}
-
-		// Store admin info in context
-		c.Set("admin_id", claims.AdminID)
-		c.Set("username", claims.Username)
-		c.Next()
-	}
 }
 
 // webAuthMiddleware validates session for web pages
@@ -260,14 +150,4 @@ func (s *Server) handleLogout(c *gin.Context) {
 	isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
 	c.SetCookie("session_token", "", -1, "/", "", isSecure, true)
 	jsonOK(c, gin.H{"message": "Logged out successfully"})
-}
-
-// getAdminID returns the current admin ID from context
-func getAdminID(c *gin.Context) string {
-	adminID, exists := c.Get("admin_id")
-	if !exists {
-		return ""
-	}
-	id, _ := adminID.(string)
-	return id
 }

@@ -16,86 +16,62 @@ import (
 	"xray-panel/internal/models"
 )
 
-// handleListRoutingRules returns all routing rules
-func (s *Server) handleListRoutingRules(c *gin.Context) {
-	var rules []models.RoutingRule
-	if err := s.db.Order("priority ASC").Find(&rules).Error; err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to fetch routing rules")
-		return
+// handleImportSingleCert imports a single certificate as a domain entry.
+// Called from the scan-certs result UI when user clicks "导入" on a specific cert.
+func (s *Server) handleImportSingleCert(c *gin.Context) {
+	var req struct {
+		Domain   string `form:"domain" json:"domain" binding:"required"`
+		CertPath string `form:"cert_path" json:"cert_path" binding:"required"`
+		KeyPath  string `form:"key_path" json:"key_path" binding:"required"`
 	}
-	jsonOK(c, rules)
-}
-
-// handleCreateRoutingRule creates a new routing rule
-func (s *Server) handleCreateRoutingRule(c *gin.Context) {
-	var rule models.RoutingRule
-	if err := c.ShouldBindJSON(&rule); err != nil {
-		jsonError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
+	if err := c.ShouldBind(&req); err != nil {
+		c.String(http.StatusBadRequest, "参数错误: "+err.Error())
 		return
 	}
 
-	rule.Enabled = true
-
-	if err := s.db.Create(&rule).Error; err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to create routing rule")
+	if !fileExists(req.CertPath) || !fileExists(req.KeyPath) {
+		c.String(http.StatusBadRequest, "证书文件不存在")
 		return
 	}
 
-	jsonCreated(c, rule)
-}
+	_, _, certDomains, isWildcard, _ := parseCertificateDetails(req.CertPath)
 
-// handleUpdateRoutingRule updates a routing rule
-func (s *Server) handleUpdateRoutingRule(c *gin.Context) {
-	id := c.Param("id")
-
-	var rule models.RoutingRule
-	if err := s.db.First(&rule, "id = ?", id).Error; err != nil {
-		jsonError(c, http.StatusNotFound, "Routing rule not found")
-		return
+	// Prefer wildcard domain name from cert if available
+	actualDomain := req.Domain
+	for _, d := range certDomains {
+		if strings.HasPrefix(d, "*.") {
+			actualDomain = d
+			break
+		}
 	}
 
-	var req models.RoutingRule
-	if err := c.ShouldBindJSON(&req); err != nil {
-		jsonError(c, http.StatusBadRequest, "Invalid request")
-		return
+	// Upsert: update if exists, create if not
+	var existing models.Domain
+	if err := s.db.Where("domain = ?", actualDomain).First(&existing).Error; err == nil {
+		existing.CertPath = req.CertPath
+		existing.KeyPath = req.KeyPath
+		existing.IsWildcard = isWildcard
+		s.db.Save(&existing)
+	} else {
+		newDomain := models.Domain{
+			Domain:     actualDomain,
+			Type:       models.DomainTypeDirect,
+			IsWildcard: isWildcard,
+			CertPath:   req.CertPath,
+			KeyPath:    req.KeyPath,
+			Enabled:    true,
+		}
+		if err := s.db.Create(&newDomain).Error; err != nil {
+			c.String(http.StatusInternalServerError, "导入失败: "+err.Error())
+			return
+		}
 	}
 
-	// Update fields
-	rule.Name = req.Name
-	rule.Type = req.Type
-	rule.Domains = req.Domains
-	rule.IPs = req.IPs
-	rule.GeoIPCodes = req.GeoIPCodes
-	rule.GeoSiteTags = req.GeoSiteTags
-	rule.Protocols = req.Protocols
-	rule.OutboundTag = req.OutboundTag
-	rule.Priority = req.Priority
-	rule.Enabled = req.Enabled
-	rule.Remark = req.Remark
+	var domains []models.Domain
+	s.db.Order("created_at DESC").Find(&domains)
 
-	if err := s.db.Save(&rule).Error; err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to update routing rule")
-		return
-	}
-
-	jsonOK(c, rule)
-}
-
-// handleDeleteRoutingRule deletes a routing rule
-func (s *Server) handleDeleteRoutingRule(c *gin.Context) {
-	id := c.Param("id")
-
-	result := s.db.Delete(&models.RoutingRule{}, "id = ?", id)
-	if result.Error != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to delete routing rule")
-		return
-	}
-	if result.RowsAffected == 0 {
-		jsonError(c, http.StatusNotFound, "Routing rule not found")
-		return
-	}
-
-	jsonOK(c, gin.H{"deleted": true})
+	c.Header("HX-Trigger", `{"showNotification": {"type": "success", "message": "证书已导入"}}`)
+	c.HTML(http.StatusOK, "components/domains-table.html", gin.H{"Domains": domains})
 }
 
 // handleImportPresetRules imports preset routing rules

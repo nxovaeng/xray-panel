@@ -1,9 +1,6 @@
 package api
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"math/big"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,99 +28,7 @@ type CreateInboundRequest struct {
 	UseUDS        *bool            `json:"use_uds"`        // 使用 Unix Domain Socket（默认 true）
 }
 
-// generateRandomPort generates a random port between 10000 and 60000
-func generateRandomPort() (int, error) {
-	// 生成 10000-60000 之间的随机端口
-	n, err := rand.Int(rand.Reader, big.NewInt(50000))
-	if err != nil {
-		return 0, err
-	}
-	return int(n.Int64()) + 10000, nil
-}
-
-// generateRandomPath generates a random path for xhttp/ws
-func generateRandomPath() string {
-	// 生成 8 字节的随机十六进制字符串
-	bytes := make([]byte, 8)
-	rand.Read(bytes)
-	return "/" + hex.EncodeToString(bytes)
-}
-
-// handleListInbounds returns all inbounds
-func (s *Server) handleListInbounds(c *gin.Context) {
-	var inbounds []models.Inbound
-	if err := s.db.Preload("Domain").Order("created_at DESC").Find(&inbounds).Error; err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to fetch inbounds")
-		return
-	}
-	jsonOK(c, inbounds)
-}
-
-// handleCreateInbound creates a new inbound
-func (s *Server) handleCreateInbound(c *gin.Context) {
-	var req CreateInboundRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		jsonError(c, http.StatusBadRequest, "Invalid request: "+err.Error())
-		return
-	}
-
-	// 处理随机端口
-	port := req.Port
-	if req.RandomPort || port == 0 {
-		randomPort, err := generateRandomPort()
-		if err != nil {
-			jsonError(c, http.StatusInternalServerError, "Failed to generate random port")
-			return
-		}
-		port = randomPort
-	}
-
-	// 处理随机路径（仅对 xhttp 和 ws 有效）
-	path := req.Path
-	if req.RandomPath || (path == "" && (req.Transport == models.TransportXHTTP || req.Transport == models.TransportWS)) {
-		path = generateRandomPath()
-	}
-
-	inbound := models.Inbound{
-		Tag:           req.Tag,
-		Protocol:      req.Protocol,
-		Transport:     req.Transport,
-		Port:          port,
-		Listen:        req.Listen,
-		DomainID:      req.DomainID,
-		Path:          path,
-		ServiceName:   req.ServiceName,
-		Host:          req.Host,
-		Mode:          req.Mode,
-		Remark:        req.Remark,
-		ConnectDomain: req.ConnectDomain,
-		CustomSNI:     req.CustomSNI,
-		Enabled:       true,
-		UseUDS:        true, // 默认使用 UDS
-	}
-
-	// 如果显式传入 use_uds=false，则关闭 UDS
-	if req.UseUDS != nil {
-		inbound.UseUDS = *req.UseUDS
-	}
-
-	// Set defaults
-	if inbound.Protocol == "" {
-		inbound.Protocol = models.ProtocolVLESS
-	}
-	if inbound.Listen == "" {
-		inbound.Listen = "127.0.0.1"
-	}
-
-	if err := s.db.Create(&inbound).Error; err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to create inbound")
-		return
-	}
-
-	jsonCreated(c, inbound)
-}
-
-// handleGetInbound returns a single inbound
+// handleGetInbound returns a single inbound as JSON (used by edit forms)
 func (s *Server) handleGetInbound(c *gin.Context) {
 	id := c.Param("id")
 
@@ -134,81 +39,4 @@ func (s *Server) handleGetInbound(c *gin.Context) {
 	}
 
 	jsonOK(c, inbound)
-}
-
-// handleUpdateInbound updates an inbound
-func (s *Server) handleUpdateInbound(c *gin.Context) {
-	id := c.Param("id")
-
-	var inbound models.Inbound
-	if err := s.db.First(&inbound, "id = ?", id).Error; err != nil {
-		jsonError(c, http.StatusNotFound, "Inbound not found")
-		return
-	}
-
-	var req CreateInboundRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		jsonError(c, http.StatusBadRequest, "Invalid request")
-		return
-	}
-
-	// 处理随机端口
-	port := req.Port
-	if req.RandomPort {
-		randomPort, err := generateRandomPort()
-		if err != nil {
-			jsonError(c, http.StatusInternalServerError, "Failed to generate random port")
-			return
-		}
-		port = randomPort
-	}
-
-	// 处理随机路径（仅对 xhttp 和 ws 有效）
-	path := req.Path
-	if req.RandomPath {
-		path = generateRandomPath()
-	}
-
-	// Update fields
-	inbound.Tag = req.Tag
-	inbound.Transport = req.Transport
-	inbound.Port = port
-	inbound.Listen = req.Listen
-	inbound.DomainID = req.DomainID
-	inbound.Path = path
-	inbound.ServiceName = req.ServiceName
-	inbound.Host = req.Host
-	inbound.Mode = req.Mode
-	inbound.Remark = req.Remark
-	inbound.ConnectDomain = req.ConnectDomain
-	inbound.CustomSNI = req.CustomSNI
-
-	// 更新 UDS 设置
-	if req.UseUDS != nil {
-		inbound.UseUDS = *req.UseUDS
-	}
-
-	if err := s.db.Save(&inbound).Error; err != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to update inbound")
-		return
-	}
-
-	jsonOK(c, inbound)
-}
-
-// handleDeleteInbound deletes an inbound
-func (s *Server) handleDeleteInbound(c *gin.Context) {
-	id := c.Param("id")
-
-	result := s.db.Delete(&models.Inbound{}, "id = ?", id)
-	if result.Error != nil {
-		jsonError(c, http.StatusInternalServerError, "Failed to delete inbound")
-		return
-	}
-	if result.RowsAffected == 0 {
-		jsonError(c, http.StatusNotFound, "Inbound not found")
-		return
-	}
-
-	jsonOK(c, gin.H{"deleted": true})
 }

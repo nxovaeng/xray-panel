@@ -23,7 +23,7 @@ func (s *Server) startTrafficSync() {
 	go func() {
 		// Wait a bit for Xray to start
 		time.Sleep(10 * time.Second)
-		logger.Info("Traffic sync worker started (interval: %v)", interval)
+		logger.Debug("Traffic sync worker started (interval: %v)", interval)
 
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -50,11 +50,11 @@ func (s *Server) syncTraffic(client *xray.APIClient) {
 	for _, user := range users {
 		// Query downlink traffic (reset after read)
 		down, _ := client.GetStats(
-			"user>>>"+user.Email+">>>traffic>>>downlink", true,
+			"user>>>"+user.StatsKey()+">>>traffic>>>downlink", true,
 		)
 		// Query uplink traffic (reset after read)
 		up, _ := client.GetStats(
-			"user>>>"+user.Email+">>>traffic>>>uplink", true,
+			"user>>>"+user.StatsKey()+">>>traffic>>>uplink", true,
 		)
 
 		total := down + up
@@ -73,6 +73,6 @@ func (s *Server) syncTraffic(client *xray.APIClient) {
 	}
 
 	if updated > 0 {
-		logger.Info("Traffic sync: updated %d users", updated)
+		logger.Debug("Traffic sync: updated %d users", updated)
 	}
 }
