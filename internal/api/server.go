@@ -224,6 +224,7 @@ func (s *Server) setupRoutes() {
 		api.POST("/outbounds/generate-wg-keys", s.handleGenerateWGKeys)
 		api.POST("/outbounds", s.webHandler.CreateOutbound)
 		api.POST("/outbounds/:id", s.webHandler.UpdateOutbound)
+		api.POST("/outbounds/:id/test", s.handleTestOutbound)
 		api.DELETE("/outbounds/:id", s.webHandler.DeleteOutbound)
 
 		// Routing

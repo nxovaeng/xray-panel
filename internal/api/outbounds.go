@@ -292,7 +292,9 @@ func testOutboundConnectivity(outbound models.Outbound) OutboundTestResult {
 	}
 }
 
-// testWireGuardConnectivity tests WireGuard endpoint connectivity
+// testWireGuardConnectivity tests WireGuard endpoint connectivity.
+// Sends a UDP probe and checks for ICMP unreachable errors.
+// WireGuard silently drops invalid packets, so a timeout = endpoint likely alive.
 func testWireGuardConnectivity(outbound models.Outbound) OutboundTestResult {
 	if outbound.Server == "" {
 		return OutboundTestResult{
@@ -310,18 +312,13 @@ func testWireGuardConnectivity(outbound models.Outbound) OutboundTestResult {
 
 	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
 
-	// Test UDP connectivity to WireGuard endpoint
-	// WireGuard uses UDP, so we test UDP reachability
-	start := time.Now()
-
-	// First, try to resolve the hostname
+	// Resolve DNS first
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var resolver net.Resolver
 	ips, err := resolver.LookupHost(ctx, outbound.Server)
 	if err != nil {
-		// If it's already an IP address, that's fine
 		if net.ParseIP(outbound.Server) == nil {
 			return OutboundTestResult{
 				Success:  false,
@@ -332,22 +329,69 @@ func testWireGuardConnectivity(outbound models.Outbound) OutboundTestResult {
 		ips = []string{outbound.Server}
 	}
 
-	// Try to connect via UDP (WireGuard uses UDP)
+	// Send a UDP probe to the WireGuard endpoint
 	for _, ip := range ips {
 		addr := net.JoinHostPort(ip, fmt.Sprintf("%d", outbound.Port))
-		conn, err := net.DialTimeout("udp", addr, 5*time.Second)
+		start := time.Now()
+
+		conn, err := net.DialTimeout("udp", addr, 3*time.Second)
 		if err != nil {
 			continue
 		}
-		defer conn.Close()
+
+		// Send a small probe packet (not a valid WireGuard handshake,
+		// but WireGuard will silently drop it rather than rejecting)
+		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_, err = conn.Write([]byte{0x01, 0x00, 0x00, 0x00})
+		if err != nil {
+			conn.Close()
+			return OutboundTestResult{
+				Success:  false,
+				Message:  fmt.Sprintf("UDP send failed: %v", err),
+				Endpoint: endpoint,
+			}
+		}
+
+		// Wait briefly for ICMP unreachable (port closed) or timeout (port open/filtered)
+		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		buf := make([]byte, 64)
+		_, readErr := conn.Read(buf)
+		conn.Close()
 
 		latency := time.Since(start).Milliseconds()
 
-		// For UDP, we can't really verify the connection without sending WireGuard handshake
-		// But we can at least verify the endpoint is reachable
+		if readErr != nil {
+			// Timeout = no ICMP error = endpoint likely alive (WireGuard drops invalid packets silently)
+			if netErr, ok := readErr.(net.Error); ok && netErr.Timeout() {
+				return OutboundTestResult{
+					Success:  true,
+					Message:  fmt.Sprintf("UDP endpoint reachable, no ICMP rejection (IP: %s)", ip),
+					Latency:  latency,
+					Endpoint: endpoint,
+				}
+			}
+			// Connection refused = port is closed, no WireGuard here
+			if strings.Contains(readErr.Error(), "connection refused") {
+				return OutboundTestResult{
+					Success:  false,
+					Message:  fmt.Sprintf("UDP port closed (ICMP unreachable, IP: %s)", ip),
+					Latency:  latency,
+					Endpoint: endpoint,
+				}
+			}
+			// Other error — still likely reachable
+			return OutboundTestResult{
+				Success:  true,
+				Message:  fmt.Sprintf("UDP endpoint reachable (IP: %s, note: %v)", ip, readErr),
+				Latency:  latency,
+				Endpoint: endpoint,
+			}
+		}
+
+		// Got a response (unusual for WireGuard with invalid packet)
 		return OutboundTestResult{
 			Success:  true,
-			Message:  fmt.Sprintf("UDP endpoint reachable (IP: %s)", ip),
+			Message:  fmt.Sprintf("UDP endpoint responded (IP: %s)", ip),
 			Latency:  latency,
 			Endpoint: endpoint,
 		}
