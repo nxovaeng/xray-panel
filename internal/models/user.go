@@ -33,9 +33,21 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 		u.UUID = uuid.New().String()
 	}
 	if u.SubPath == "" {
-		u.SubPath = uuid.New().String()[:8] // short path for subscription URL
+		u.SubPath = generateSubPath(12)
 	}
 	return nil
+}
+
+// generateSubPath generates a random subscription path using characters
+// that are unambiguous (excludes i, l, 1, 0, o to avoid visual confusion).
+func generateSubPath(length int) string {
+	const charset = "abcdefghjkmnpqrstuvwxyz23456789"
+	b := make([]byte, length)
+	for i := range b {
+		// Use uuid as entropy source (simple, no extra import needed)
+		b[i] = charset[int(uuid.New()[0])%len(charset)]
+	}
+	return string(b)
 }
 
 // IsActive checks if user is enabled and not expired

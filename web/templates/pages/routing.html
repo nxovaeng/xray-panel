@@ -1,4 +1,4 @@
-﻿{{define "routing"}}
+{{define "routing"}}
 <!DOCTYPE html>
 <html lang="zh-CN">
 
@@ -95,6 +95,16 @@
             </button>
         </div>
     </div>
+
+    {{if and (eq .PanelMode "client") (ne .ClientRoutingMode "custom")}}
+    <div style="padding: 1rem 1.25rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 8px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+        <span style="font-size: 1.2rem;">⚠️</span>
+        <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.6;">
+            当前使用<strong style="color: var(--warning);">内置路由规则（{{if eq .ClientRoutingMode "white"}}绕过大陆{{else}}黑名单{{end}}）</strong>，下方的自定义规则<strong>不会生效</strong>。<br>
+            如需使用自定义规则，请前往 <a href="/settings" style="color: var(--accent);">应用配置</a> 将客户端路由模式改为"自定义"。
+        </div>
+    </div>
+    {{end}}
 
     <div class="table-container">
         <div id="routing-table" hx-get="/api/routing/table" hx-trigger="load" hx-swap="innerHTML">

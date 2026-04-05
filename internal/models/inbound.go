@@ -52,7 +52,7 @@ type Inbound struct {
 	ServiceName string `json:"service_name" form:"service_name"`
 	Host        string `json:"host" form:"host"`
 
-	// XHTTP specific
+	// XHTTP specific (unused: server mode is always "auto", kept for DB compatibility)
 	Mode string `json:"mode" form:"mode"`
 
 	// Wildcard certificate support

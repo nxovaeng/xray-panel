@@ -142,6 +142,12 @@ func (s *Server) handleApplyXrayConfig(c *gin.Context) {
 		return
 	}
 
+	// 2.5. Validate config before restarting
+	if err := s.validateXrayConfig(); err != nil {
+		jsonError(c, http.StatusBadRequest, "配置校验失败，服务未重启: "+err.Error())
+		return
+	}
+
 	// 3. Generate Nginx configs
 	var inbounds []models.Inbound
 	s.db.Preload("Domain").Where("enabled = ?", true).Find(&inbounds)
@@ -180,24 +186,54 @@ func (s *Server) handleApplyXrayConfig(c *gin.Context) {
 	})
 }
 
-// applyXrayConfigHot applies configuration changes via Xray API (hot reload)
-// NOTE: Xray uses gRPC API, not HTTP. Full implementation requires:
-// 1. Add google.golang.org/grpc dependency
-// 2. Import Xray protobuf definitions from github.com/xtls/xray-core
-// 3. Implement gRPC client calls for HandlerService
-//
-// For now, this function returns an error suggesting to use the restart method.
+// applyXrayConfigHot applies configuration by writing config and restarting Xray.
+// Full gRPC-based hot reload is not yet implemented; this is a functional fallback.
 func (s *Server) applyXrayConfigHot() error {
-	// Hot reload via gRPC API is not implemented yet.
-	// The Xray API uses gRPC protocol (not HTTP REST), which requires:
-	// - gRPC client library
-	// - Xray protobuf definitions
-	// - Connection to Xray's dokodemo-door API inbound
-	//
-	// Current workaround: Use the restart method which writes config to file
-	// and restarts the Xray service via systemctl.
+	configJSON, err := s.generateXrayConfig()
+	if err != nil {
+		return fmt.Errorf("failed to generate config: %w", err)
+	}
 
-	return fmt.Errorf("热更新功能暂未实现，请使用重启方式应用配置")
+	if err := os.WriteFile(s.config.Xray.ConfigPath, configJSON, 0644); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	// Validate before restart
+	if err := s.validateXrayConfig(); err != nil {
+		return fmt.Errorf("配置校验失败: %w", err)
+	}
+
+	cmd := exec.Command("systemctl", "restart", "xray")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to restart xray: %w", err)
+	}
+
+	logger.Info("Xray config applied via hot reload (write + restart)")
+	return nil
+}
+
+// validateXrayConfig runs `xray -test -c <config>` to validate the generated config.
+// Returns nil if valid, error with details if invalid.
+func (s *Server) validateXrayConfig() error {
+	binaryPath := s.config.Xray.BinaryPath
+	if binaryPath == "" {
+		binaryPath = "/usr/local/bin/xray"
+	}
+
+	cmd := exec.Command(binaryPath, "-test", "-c", s.config.Xray.ConfigPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Error("Xray config validation failed: %s", string(output))
+		// Extract the meaningful error line from output
+		errMsg := string(output)
+		if len(errMsg) > 500 {
+			errMsg = errMsg[:500] + "..."
+		}
+		return fmt.Errorf("%s", errMsg)
+	}
+
+	logger.Info("Xray config validation passed ✓")
+	return nil
 }
 
 // generateXrayConfig creates the Xray configuration

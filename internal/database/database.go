@@ -96,9 +96,15 @@ func Seed(db *gorm.DB, cfg *config.Config) error {
 		fmt.Printf("\n🔑 初始密码: %s\n   (此信息不会再次显示，请立即保存)\n\n", password)
 	}
 
-	// 2. Default settings
+	// 2. Default settings — ensure all keys exist (auto-migrate on upgrade)
 	for _, s := range models.DefaultSettings() {
-		db.Where("key = ?", s.Key).FirstOrCreate(&s)
+		var existing models.Setting
+		result := db.Where("key = ?", s.Key).First(&existing)
+		if result.Error != nil {
+			// Key doesn't exist, create it
+			db.Create(&s)
+			applogger.Info("📦 新增配置项: %s = %s (%s)", s.Key, s.Value, s.Remark)
+		}
 	}
 
 	// 3. Default routing rules

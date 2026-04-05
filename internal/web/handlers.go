@@ -653,6 +653,24 @@ func (h *Handler) DeleteInbound(c *gin.Context) {
 	c.String(http.StatusOK, "")
 }
 
+func (h *Handler) ToggleInbound(c *gin.Context) {
+	id := c.Param("id")
+	var inbound models.Inbound
+	if err := h.db.First(&inbound, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Inbound not found")
+		return
+	}
+
+	inbound.Enabled = !inbound.Enabled
+	if err := h.db.Save(&inbound).Error; err != nil {
+		c.String(http.StatusInternalServerError, "Error toggling inbound")
+		return
+	}
+
+	logger.Info("Inbound %s toggled to enabled=%v", inbound.Tag, inbound.Enabled)
+	h.InboundsTable(c)
+}
+
 // ============ Domains API ============
 
 func (h *Handler) DomainsTable(c *gin.Context) {

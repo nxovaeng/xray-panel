@@ -302,19 +302,17 @@
 
     async function generateWGKeys() {
         try {
-            const keyPair = await crypto.subtle.generateKey(
-                { name: 'X25519' },
-                true,
-                ['deriveKey', 'deriveBits']
-            );
-            const privRaw = await crypto.subtle.exportKey('raw', keyPair.privateKey);
-            const pubRaw = await crypto.subtle.exportKey('raw', keyPair.publicKey);
-            const toBase64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
-            document.getElementById('wg_secret_key').value = toBase64(privRaw);
-            document.getElementById('wg_public_key').value = toBase64(pubRaw);
-            showNotification('密钥对已生成，请保存私钥', 'success');
+            const resp = await fetch('/api/outbounds/generate-wg-keys', { method: 'POST' });
+            const data = await resp.json();
+            if (data.error) {
+                showNotification('生成失败: ' + data.error, 'error');
+                return;
+            }
+            document.getElementById('wg_secret_key').value = data.private_key;
+            document.getElementById('wg_public_key').value = data.public_key;
+            showNotification('密钥对已生成，请保存', 'success');
         } catch (e) {
-            showNotification('浏览器不支持自动生成，请使用 wg genkey | tee private.key | wg pubkey 手动生成', 'error');
+            showNotification('生成失败: ' + e.message, 'error');
         }
     }
 </script>

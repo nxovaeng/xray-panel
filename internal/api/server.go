@@ -27,6 +27,11 @@ var loginLimiter = &loginRateLimiter{
 	attempts: make(map[string][]time.Time),
 }
 
+// subLimiter limits subscription requests: 30 per minute per IP
+var subLimiter = &loginRateLimiter{
+	attempts: make(map[string][]time.Time),
+}
+
 // allow returns true if the IP is allowed to attempt login
 // Limit: 10 attempts per 5 minutes per IP
 func (l *loginRateLimiter) allow(ip string) bool {
@@ -117,6 +122,7 @@ func NewServer(cfg *config.Config, db *gorm.DB) *Server {
 
 // Run starts the server
 func (s *Server) Run() error {
+	s.startTrafficSync()
 	return s.router.Run(s.config.Server.Listen)
 }
 
@@ -209,11 +215,13 @@ func (s *Server) setupRoutes() {
 		api.GET("/inbounds/table", s.webHandler.InboundsTable)
 		api.POST("/inbounds", s.webHandler.CreateInbound)
 		api.POST("/inbounds/:id", s.webHandler.UpdateInbound)
+		api.POST("/inbounds/:id/toggle", s.webHandler.ToggleInbound)
 		api.DELETE("/inbounds/:id", s.webHandler.DeleteInbound)
 
 		// Outbounds
 		api.GET("/outbounds/table", s.webHandler.OutboundsTable)
 		api.POST("/outbounds/import", s.webHandler.ImportShareLink)
+		api.POST("/outbounds/generate-wg-keys", s.handleGenerateWGKeys)
 		api.POST("/outbounds", s.webHandler.CreateOutbound)
 		api.POST("/outbounds/:id", s.webHandler.UpdateOutbound)
 		api.DELETE("/outbounds/:id", s.webHandler.DeleteOutbound)
@@ -286,6 +294,7 @@ func (s *Server) setupRoutes() {
 				outbounds.POST("", s.handleCreateOutbound)
 				// Static routes must come before parameterized routes
 				outbounds.POST("/parse-wireguard", s.handleParseWireGuardConfig)
+				outbounds.POST("/generate-wg-keys", s.handleGenerateWGKeys)
 				// Parameterized routes
 				outbounds.GET("/:id", s.handleGetOutbound)
 				outbounds.PUT("/:id", s.handleUpdateOutbound)
@@ -332,9 +341,34 @@ func (s *Server) setupRoutes() {
 		}
 	}
 
-	// Subscription routes (public, but require user path)
-	s.router.GET("/sub/:path", s.handleSubscription)
-	s.router.GET("/sub/:path/:format", s.handleSubscription)
+	// Subscription routes (public, rate-limited)
+	subGroup := s.router.Group("/sub")
+	subGroup.Use(func(c *gin.Context) {
+		ip := c.ClientIP()
+		// Override window for subscription: 30 req/min
+		subLimiter.mu.Lock()
+		now := time.Now()
+		window := 1 * time.Minute
+		maxReqs := 30
+		valid := subLimiter.attempts[ip][:0]
+		for _, t := range subLimiter.attempts[ip] {
+			if now.Sub(t) < window {
+				valid = append(valid, t)
+			}
+		}
+		subLimiter.attempts[ip] = valid
+		if len(subLimiter.attempts[ip]) >= maxReqs {
+			subLimiter.mu.Unlock()
+			c.String(http.StatusTooManyRequests, "Rate limit exceeded")
+			c.Abort()
+			return
+		}
+		subLimiter.attempts[ip] = append(subLimiter.attempts[ip], now)
+		subLimiter.mu.Unlock()
+		c.Next()
+	})
+	subGroup.GET("/:path", s.handleSubscription)
+	subGroup.GET("/:path/:format", s.handleSubscription)
 }
 
 // handleHealth returns server health status

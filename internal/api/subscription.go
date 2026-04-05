@@ -48,14 +48,20 @@ func (s *Server) handleSubscription(c *gin.Context) {
 		if inbound.ExcludeFromSub {
 			continue
 		}
-		link := generateVLESSLink(user, inbound)
+		var link string
+		switch inbound.Protocol {
+		case models.ProtocolTrojan:
+			link = generateTrojanLink(user, inbound)
+		default:
+			link = generateVLESSLink(user, inbound)
+		}
 		if link != "" {
 			links = append(links, link)
 		}
 	}
 
 	// Calculate user info
-	uploadBytes := int64(0) // TODO: implement upload tracking
+	uploadBytes := int64(0) // Upload/download combined in TrafficUsed
 	downloadBytes := user.TrafficUsed
 	totalBytes := user.TrafficLimit
 	expireTime := int64(0)
@@ -216,6 +222,68 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 	return link
 }
 
+// generateTrojanLink generates a Trojan share link for a specific inbound
+func generateTrojanLink(user models.User, inbound models.Inbound) string {
+	sniDomain := ""
+	if inbound.Domain != nil {
+		sniDomain = inbound.Domain.Domain
+		if inbound.ActualDomain != "" {
+			sniDomain = inbound.ActualDomain
+		}
+	} else if inbound.CustomSNI != "" {
+		sniDomain = inbound.CustomSNI
+	} else {
+		return ""
+	}
+
+	connectDomain := sniDomain
+	if inbound.ConnectDomain != "" {
+		connectDomain = inbound.ConnectDomain
+	}
+
+	port := 443
+
+	params := url.Values{}
+	params.Set("type", string(inbound.Transport))
+	params.Set("security", "tls")
+	params.Set("sni", sniDomain)
+	params.Set("alpn", "h2")
+	params.Set("fp", "chrome")
+
+	switch inbound.Transport {
+	case models.TransportXHTTP:
+		params.Set("path", inbound.Path)
+		if inbound.Host != "" {
+			params.Set("host", inbound.Host)
+		}
+		params.Set("mode", "auto")
+	case models.TransportGRPC:
+		params.Set("serviceName", inbound.ServiceName)
+		params.Set("mode", "multi")
+	case models.TransportWS:
+		params.Set("path", inbound.Path)
+		if inbound.Host != "" {
+			params.Set("host", inbound.Host)
+		}
+	}
+
+	remark := inbound.Remark
+	if remark == "" {
+		remark = fmt.Sprintf("%s-%s-%s", sniDomain, inbound.Protocol, inbound.Transport)
+	}
+
+	// trojan:// uses password (UUID) as userinfo
+	link := fmt.Sprintf("trojan://%s@%s:%d?%s#%s",
+		user.UUID,
+		connectDomain,
+		port,
+		params.Encode(),
+		url.PathEscape(remark),
+	)
+
+	return link
+}
+
 // generateClashConfig generates Clash configuration
 func generateClashConfig(user models.User, inbounds []models.Inbound) string {
 	var sb strings.Builder
@@ -251,20 +319,27 @@ func generateClashConfig(user models.User, inbounds []models.Inbound) string {
 		}
 
 		sb.WriteString(fmt.Sprintf("  - name: \"%s\"\n", name))
-		sb.WriteString("    type: vless\n")
-		sb.WriteString(fmt.Sprintf("    server: %s\n", connectDomain)) // 连接目标域名
 
-		// Use port 443 for Nginx reverse proxy connections
+		// Protocol type
+		if inbound.Protocol == models.ProtocolTrojan {
+			sb.WriteString("    type: trojan\n")
+		} else {
+			sb.WriteString("    type: vless\n")
+		}
+
+		sb.WriteString(fmt.Sprintf("    server: %s\n", connectDomain))
+
 		port := 443
 		sb.WriteString(fmt.Sprintf("    port: %d\n", port))
 
-		sb.WriteString(fmt.Sprintf("    uuid: %s\n", user.UUID))
-		sb.WriteString("    cipher: none\n")
+		if inbound.Protocol == models.ProtocolTrojan {
+			sb.WriteString(fmt.Sprintf("    password: %s\n", user.UUID))
+		} else {
+			sb.WriteString(fmt.Sprintf("    uuid: %s\n", user.UUID))
+			sb.WriteString("    cipher: none\n")
+		}
 
-		// Network type
 		sb.WriteString(fmt.Sprintf("    network: %s\n", inbound.Transport))
-
-		// TLS 始终启用（客户端到 Nginx）
 		sb.WriteString("    tls: true\n")
 		sb.WriteString(fmt.Sprintf("    servername: %s\n", sniDomain)) // SNI 使用反代子域名
 
