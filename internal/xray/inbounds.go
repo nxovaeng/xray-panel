@@ -240,9 +240,15 @@ func (g *Generator) generateWireGuardInbound(inbound models.Inbound) (*InboundCo
 		"noKernelTun":    true, // Xray WireGuard 使用用户态实现，无需内核模块
 	}
 
+	listen := inbound.Listen
+	// WireGuard must listen on all interfaces, unlike TCP proxies that sit behind Nginx
+	if listen == "" || listen == "127.0.0.1" {
+		listen = "0.0.0.0"
+	}
+
 	return &InboundConfig{
 		Tag:      inbound.Tag,
-		Listen:   inbound.Listen,
+		Listen:   listen,
 		Port:     inbound.Port,
 		Protocol: "wireguard",
 		Settings: settings,
