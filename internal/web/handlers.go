@@ -352,6 +352,24 @@ func (h *Handler) DeleteUser(c *gin.Context) {
 	c.String(http.StatusOK, "")
 }
 
+func (h *Handler) ToggleUser(c *gin.Context) {
+	id := c.Param("id")
+
+	var user models.User
+	if err := h.db.First(&user, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "用户不存在")
+		return
+	}
+
+	user.Enabled = !user.Enabled
+	if err := h.db.Save(&user).Error; err != nil {
+		c.String(http.StatusInternalServerError, "操作失败")
+		return
+	}
+
+	h.UsersTable(c)
+}
+
 func (h *Handler) SearchUsers(c *gin.Context) {
 	query := c.Query("q")
 	var users []models.User
@@ -434,6 +452,10 @@ func (h *Handler) CreateInbound(c *gin.Context) {
 
 	// WireGuard inbound: force UseUDS=false and skip domain logic
 	if inbound.Protocol == models.ProtocolWireGuard {
+		if inbound.WGSecretKey == "" {
+			c.String(http.StatusBadRequest, "WireGuard 入站需要填写私钥")
+			return
+		}
 		inbound.UseUDS = false
 		inbound.DomainID = ""
 		inbound.ActualDomain = ""

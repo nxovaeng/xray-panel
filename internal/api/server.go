@@ -214,6 +214,7 @@ func (s *Server) setupRoutes() {
 		api.POST("/users", s.webHandler.CreateUser)
 		api.POST("/users/:id", s.webHandler.UpdateUser)
 		api.POST("/users/:id/reset-traffic", s.handleResetUserTraffic)
+		api.POST("/users/:id/toggle", s.webHandler.ToggleUser)
 		api.DELETE("/users/:id", s.webHandler.DeleteUser)
 
 		// Inbounds

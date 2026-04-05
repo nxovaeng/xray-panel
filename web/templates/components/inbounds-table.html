@@ -4,7 +4,6 @@
         <tr>
             <th>标签</th>
             <th>协议</th>
-            <th>状态</th>
             <th>端口</th>
             <th>传输</th>
             <th>域名</th>
@@ -20,16 +19,6 @@
                 {{if .ExcludeFromSub}}<span class="badge badge-warning" title="不出现在订阅链接中" style="margin-left:4px;">内部</span>{{end}}
             </td>
             <td>
-                <button class="btn btn-sm {{if .Enabled}}btn-outline{{else}}btn-outline{{end}}"
-                    style="{{if .Enabled}}color: var(--success); border-color: rgba(34,197,94,0.3);{{else}}color: var(--danger); border-color: rgba(239,68,68,0.3);{{end}} padding: 0.15rem 0.5rem; font-size: 0.8rem;"
-                    hx-post="/api/inbounds/{{.ID}}/toggle"
-                    hx-target="#inbounds-table"
-                    hx-swap="innerHTML"
-                    title="{{if .Enabled}}点击禁用{{else}}点击启用{{end}}">
-                    {{if .Enabled}}✓ 启用{{else}}✗ 禁用{{end}}
-                </button>
-            </td>
-            <td>
                 {{if eq .Protocol "wireguard"}}
                     <span style="color: var(--text-secondary);">{{.Port}}/UDP</span>
                 {{else if .UseUDS}}
@@ -43,7 +32,7 @@
                 {{if .Domain}}
                     <div style="display:flex;flex-direction:column;gap:0.2rem;">
                         <div style="display:flex;align-items:center;gap:0.3rem;">
-                            <i data-lucide="globe" style="width:14px;"></i> 
+                            <i data-lucide="globe" style="width:14px;"></i>
                             {{.Domain.Domain}}
                         </div>
                         {{if .ActualDomain}}
@@ -59,6 +48,14 @@
             </td>
             <td>
                 <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-sm btn-outline"
+                        style="{{if .Enabled}}color: var(--success); border-color: rgba(34,197,94,0.3);{{else}}color: var(--danger); border-color: rgba(239,68,68,0.3);{{end}}"
+                        hx-post="/api/inbounds/{{.ID}}/toggle"
+                        hx-target="#inbounds-table"
+                        hx-swap="innerHTML"
+                        title="{{if .Enabled}}点击禁用{{else}}点击启用{{end}}">
+                        <i data-lucide="{{if .Enabled}}check-circle{{else}}x-circle{{end}}" style="width: 16px; height: 16px;"></i>
+                    </button>
                     <button hx-get="/inbounds/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑入站')"
                         class="btn btn-sm btn-outline" title="编辑">
                         <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
@@ -73,7 +70,7 @@
         </tr>
         {{else}}
         <tr>
-            <td colspan="7" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
+            <td colspan="6" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
                 <i data-lucide="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
                 <div>暂无入站配置</div>
             </td>

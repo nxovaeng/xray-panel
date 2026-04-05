@@ -5,13 +5,12 @@
             <th>用户 / 邮箱</th>
             <th>UUID</th>
             <th>流量使用</th>
-            <th>状态</th>
             <th>操作</th>
         </tr>
     </thead>
     <tbody>
         {{range .Users}}
-        <tr id="user-{{.ID}}">
+        <tr id="user-{{.ID}}" {{if not .IsActive}}style="opacity: 0.5;"{{end}}>
             <td>
                 <div style="font-weight: 600;">{{.Name}}</div>
                 <div style="font-size: 0.8rem; color: var(--text-secondary);">{{.Email}}</div>
@@ -35,21 +34,22 @@
                 </div>
             </td>
             <td>
-                <span class="badge {{if .IsActive}}badge-success{{else}}badge-danger{{end}}">
-                    {{if .IsActive}}正常{{else}}禁用{{end}}
-                </span>
-            </td>
-            <td>
                 <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-sm btn-outline"
+                        style="{{if .Enabled}}color: var(--success); border-color: rgba(34,197,94,0.3);{{else}}color: var(--danger); border-color: rgba(239,68,68,0.3);{{end}}"
+                        hx-post="/api/users/{{.ID}}/toggle"
+                        hx-target="#users-table"
+                        hx-swap="innerHTML"
+                        title="{{if .Enabled}}点击禁用{{else}}点击启用{{end}}">
+                        <i data-lucide="{{if .Enabled}}check-circle{{else}}x-circle{{end}}" style="width: 16px; height: 16px;"></i>
+                    </button>
                     <button onclick="toggleSubscription('{{.ID}}')" class="btn btn-sm btn-outline" title="查看订阅">
                         <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
                     </button>
-
                     <button hx-get="/users/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑用户')"
                         class="btn btn-sm btn-outline" title="编辑">
                         <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>
                     </button>
-
                     <button hx-delete="/api/users/{{.ID}}" hx-target="#user-{{.ID}}" hx-swap="outerHTML swap:0.5s"
                         hx-confirm="确定删除此用户？" class="btn btn-sm btn-outline"
                         style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);" title="删除">
@@ -60,7 +60,7 @@
         </tr>
         <!-- Subscription details row (hidden by default) -->
         <tr id="sub-{{.ID}}" class="subscription-details" style="display: none;">
-            <td colspan="5" style="background: var(--bg-secondary); padding: 1.5rem;">
+            <td colspan="4" style="background: var(--bg-secondary); padding: 1.5rem;">
                 <div style="max-width: 800px;">
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border);">
                         <i data-lucide="link" style="width: 20px; height: 20px; color: var(--accent);"></i>
@@ -177,7 +177,7 @@
         </tr>
         {{else}}
         <tr>
-            <td colspan="5" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
+            <td colspan="4" class="text-center" style="padding: 3rem; color: var(--text-secondary);">
                 <i data-lucide="users" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
                 <div>暂无用户</div>
             </td>

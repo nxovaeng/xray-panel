@@ -66,7 +66,7 @@ func (s *Server) syncTraffic(client *xray.APIClient) {
 		if err := s.db.Model(&models.User{}).
 			Where("id = ?", user.ID).
 			Update("traffic_used", gorm.Expr("traffic_used + ?", total)).Error; err != nil {
-			logger.Error("Traffic sync: failed to update user %s: %v", user.Email, err)
+			logger.Error("Traffic sync: failed to update user %s: %v", user.StatsKey(), err)
 			continue
 		}
 		updated++

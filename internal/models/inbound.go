@@ -65,11 +65,11 @@ type Inbound struct {
 	ConnectDomain string `json:"connect_domain" form:"connect_domain"`
 
 	// WireGuard specific fields
-	WGSecretKey  string `json:"wg_secret_key" form:"wg_secret_key"`   // 服务端私钥
-	WGPublicKey  string `json:"wg_public_key" form:"wg_public_key"`   // 服务端公钥（展示用）
+	WGSecretKey  string `json:"-" form:"wg_secret_key"`              // 服务端私钥（不暴露到 JSON）
+	WGPublicKey  string `json:"wg_public_key" form:"wg_public_key"`  // 服务端公钥（展示用）
 	WGPeerPubKey string `json:"wg_peer_pub_key" form:"wg_peer_pub_key"` // 对端（出站节点）公钥
-	WGMTU        int    `json:"wg_mtu" form:"wg_mtu"`                 // MTU，默认 1420
-	WGLocalIP    string `json:"wg_local_ip" form:"wg_local_ip"`       // 本端 WireGuard 虚拟 IP，如 10.0.0.1/24
+	WGMTU        int    `json:"wg_mtu" form:"wg_mtu"`                // MTU，默认 1420
+	WGLocalIP    string `json:"wg_local_ip" form:"wg_local_ip"`      // 本端 WireGuard 虚拟 IP，如 10.0.0.1/24
 
 	// 是否排除在订阅链接之外（WireGuard 入站等内部中转节点不应出现在用户订阅中）
 	ExcludeFromSub bool `json:"exclude_from_sub" form:"exclude_from_sub" gorm:"default:false"`

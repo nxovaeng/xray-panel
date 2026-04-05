@@ -34,8 +34,9 @@ type APIConfig struct {
 
 // DNSConfig represents DNS configuration
 type DNSConfig struct {
-	Servers []interface{} `json:"servers,omitempty"`
-	Tag     string        `json:"tag,omitempty"`
+	Servers       []interface{} `json:"servers,omitempty"`
+	Tag           string        `json:"tag,omitempty"`
+	QueryStrategy string        `json:"queryStrategy,omitempty"`
 }
 
 // StatsConfig enables statistics
@@ -184,6 +185,7 @@ func (g *Generator) Generate() (*Config, error) {
 		config.DNS = g.generateDNSForClient()
 	} else {
 		config.DNS = &DNSConfig{
+			QueryStrategy: "UseIP", // 同时查询 A 和 AAAA，支持 IPv6 出口
 			Servers: []interface{}{
 				"1.1.1.1",
 				"8.8.8.8",
@@ -270,6 +272,7 @@ func (g *Generator) Generate() (*Config, error) {
 // generateDNSForClient generates comprehensive anti-poison DNS arrays needed for the proxy client
 func (g *Generator) generateDNSForClient() *DNSConfig {
 	return &DNSConfig{
+		QueryStrategy: "UseIP", // 同时查询 A 和 AAAA，支持 IPv6 出口
 		Servers: []interface{}{
 			// Remote DNS (Anti-poison) - Use tcp:// to ensure it goes through ROUTING and thus PROXY
 			map[string]interface{}{
