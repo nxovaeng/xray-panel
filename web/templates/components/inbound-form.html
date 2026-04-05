@@ -190,9 +190,9 @@
             <small class="form-hint">默认 1420，通常无需修改</small>
         </div>
 
-        <input type="hidden" name="exclude_from_sub" value="true">
-        <input type="hidden" name="use_uds" value="false">
-        <input type="hidden" name="transport" value="raw">
+        <input type="hidden" id="wg_hidden_exclude_sub" name="exclude_from_sub" value="true" {{if not (and .Inbound (eq .Inbound.Protocol "wireguard"))}}disabled{{end}}>
+        <input type="hidden" id="wg_hidden_use_uds" name="use_uds" value="false" {{if not (and .Inbound (eq .Inbound.Protocol "wireguard"))}}disabled{{end}}>
+        <input type="hidden" id="wg_hidden_transport" name="transport" value="raw" {{if not (and .Inbound (eq .Inbound.Protocol "wireguard"))}}disabled{{end}}>
 
     </div><!-- end wg-fields -->
 
@@ -233,6 +233,13 @@
             // 禁用 proxy port，启用 wg port
             if (portInput) portInput.disabled = true;
             if (wgPortInput) wgPortInput.disabled = false;
+            
+            // 启用 wireguard 的隐藏字段，并禁用原本的 select
+            if (document.getElementById('wg_hidden_exclude_sub')) document.getElementById('wg_hidden_exclude_sub').disabled = false;
+            if (document.getElementById('wg_hidden_use_uds')) document.getElementById('wg_hidden_use_uds').disabled = false;
+            if (document.getElementById('wg_hidden_transport')) document.getElementById('wg_hidden_transport').disabled = false;
+            if (document.getElementById('exclude_from_sub_select')) document.getElementById('exclude_from_sub_select').disabled = true;
+
         } else {
             proxyFields.style.display = 'block';
             wgFields.style.display = 'none';
@@ -242,6 +249,12 @@
             const useUDS = document.getElementById('use_uds');
             const isUDS = !useUDS || useUDS.value === 'true';
             if (portInput) portInput.disabled = isUDS;
+
+            // 禁用 wireguard 的隐藏字段，并启用原本的 select
+            if (document.getElementById('wg_hidden_exclude_sub')) document.getElementById('wg_hidden_exclude_sub').disabled = true;
+            if (document.getElementById('wg_hidden_use_uds')) document.getElementById('wg_hidden_use_uds').disabled = true;
+            if (document.getElementById('wg_hidden_transport')) document.getElementById('wg_hidden_transport').disabled = true;
+            if (document.getElementById('exclude_from_sub_select')) document.getElementById('exclude_from_sub_select').disabled = false;
         }
     }
 

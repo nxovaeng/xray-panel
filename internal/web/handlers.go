@@ -48,6 +48,7 @@ func (h *Handler) renderPage(c *gin.Context, template string, data gin.H) {
 	}
 	data["User"] = user
 	data["PanelMode"] = models.GetPanelMode(h.db)
+	data["ClientRoutingMode"] = models.GetClientRoutingMode(h.db)
 
 	c.HTML(http.StatusOK, template, data)
 }

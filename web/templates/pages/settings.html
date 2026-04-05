@@ -1,4 +1,4 @@
-﻿{{define "settings"}}
+{{define "settings"}}
 <!DOCTYPE html>
 <html lang="zh-CN">
 
@@ -49,6 +49,19 @@
                         </select>
                         <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
                             切换模式后需要保存并应用配置才能完整生效。</p>
+                    </div>
+
+                    <div class="form-group" id="client-routing-mode-container" style="display: {{if eq .PanelMode "client"}}block{{else}}none{{end}};">
+                        <label>客户端路由模式 <span class="badge badge-info" style="font-size: 0.7em;">仅客户端生效</span></label>
+                        <select id="client-routing-mode" class="form-control" style="max-width: 300px;">
+                            <option value="white" {{if eq .ClientRoutingMode "white" }}selected{{end}}>绕过大陆 (默认直连CN)</option>
+                            <option value="black" {{if eq .ClientRoutingMode "black" }}selected{{end}}>黑名单 (仅代理被墙)</option>
+                            <option value="custom" {{if eq .ClientRoutingMode "custom" }}selected{{end}}>自定义 (面板路由页面)</option>
+                        </select>
+                        <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
+                            <strong>绕过大陆</strong>：国内IP与域名直连，其余全部走代理 (Whitelist)。<br>
+                            <strong>黑名单</strong>：全部流量默认直连，仅被墙/海外已知IP走代理 (Blacklist)。
+                        </p>
                     </div>
 
                     <button class="btn btn-primary" onclick="savePanelMode()" id="btn-save-mode">
@@ -127,6 +140,7 @@
         function savePanelMode() {
             const btn = document.getElementById('btn-save-mode');
             const mode = document.getElementById('panel-mode').value;
+            const routingMode = document.getElementById('client-routing-mode').value;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 保存中...';
             btn.disabled = true;
@@ -138,7 +152,8 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    panel_mode: mode
+                    panel_mode: mode,
+                    client_routing_mode: routingMode
                 }),
                 credentials: 'same-origin'
             })
@@ -236,6 +251,16 @@
                     pre.innerText = "加载失败: " + err;
                 });
         }
+
+        // Toggle client routing mode visibility based on panel mode
+        document.getElementById('panel-mode').addEventListener('change', function() {
+            const container = document.getElementById('client-routing-mode-container');
+            if (this.value === 'client') {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        });
     </script>
 </body>
 

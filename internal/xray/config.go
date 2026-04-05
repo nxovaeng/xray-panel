@@ -73,8 +73,9 @@ type Generator struct {
 	domains   map[string]models.Domain
 	apiPort   int
 	logLevel  string
-	socketDir string
-	panelMode string
+	socketDir         string
+	panelMode         string
+	clientRoutingMode string
 }
 
 // NewGenerator creates a new configuration generator
@@ -139,6 +140,12 @@ func (g *Generator) SetSocketDir(dir string) *Generator {
 // SetPanelMode sets the working mode of the panel (server / client)
 func (g *Generator) SetPanelMode(mode string) *Generator {
 	g.panelMode = mode
+	return g
+}
+
+// SetClientRoutingMode sets the client routing mode (white / black / custom)
+func (g *Generator) SetClientRoutingMode(mode string) *Generator {
+	g.clientRoutingMode = mode
 	return g
 }
 

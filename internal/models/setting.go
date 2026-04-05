@@ -26,6 +26,7 @@ func DefaultSettings() []Setting {
 	return []Setting{
 		{Key: "panel_title", Value: "Xray Panel", Type: "string", Remark: "Panel title"},
 		{Key: "panel_mode", Value: "server", Type: "string", Remark: "Panel working mode (server / client)"},
+		{Key: "client_routing_mode", Value: "white", Type: "string", Remark: "Client routing mode (white / black / custom)"},
 		{Key: "sub_domain", Value: "", Type: "string", Remark: "Subscription domain"},
 		{Key: "sub_path", Value: "/sub", Type: "string", Remark: "Subscription URL path prefix"},
 		{Key: "xray_log_level", Value: "warning", Type: "string", Remark: "Xray log level"},
@@ -46,4 +47,16 @@ func GetPanelMode(db *gorm.DB) string {
 		return "client"
 	}
 	return "server"
+}
+
+// GetClientRoutingMode returns the current client routing mode ("white", "black" or "custom")
+func GetClientRoutingMode(db *gorm.DB) string {
+	var setting Setting
+	if err := db.First(&setting, "key = ?", "client_routing_mode").Error; err != nil {
+		return "white" // Default to white if not found
+	}
+	if setting.Value == "black" || setting.Value == "custom" {
+		return setting.Value
+	}
+	return "white"
 }

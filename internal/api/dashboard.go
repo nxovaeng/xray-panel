@@ -220,6 +220,8 @@ func (s *Server) generateXrayConfig() ([]byte, error) {
 		panelMode = modeSetting.Value
 	}
 
+	clientRoutingMode := models.GetClientRoutingMode(s.db)
+
 	generator := xray.NewGenerator()
 	generator.SetUsers(users)
 	generator.SetInbounds(inbounds)
@@ -229,6 +231,7 @@ func (s *Server) generateXrayConfig() ([]byte, error) {
 	generator.SetAPIPort(s.config.Xray.APIPort)
 	generator.SetSocketDir(s.config.Xray.SocketDir)
 	generator.SetPanelMode(panelMode)
+	generator.SetClientRoutingMode(clientRoutingMode)
 
 	return generator.GenerateJSON()
 }
