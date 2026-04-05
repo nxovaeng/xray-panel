@@ -224,6 +224,7 @@ func (s *Server) setupRoutes() {
 		api.POST("/outbounds/generate-wg-keys", s.handleGenerateWGKeys)
 		api.POST("/outbounds", s.webHandler.CreateOutbound)
 		api.POST("/outbounds/:id", s.webHandler.UpdateOutbound)
+		api.POST("/outbounds/:id/toggle", s.webHandler.ToggleOutbound)
 		api.POST("/outbounds/:id/test", s.handleTestOutbound)
 		api.DELETE("/outbounds/:id", s.webHandler.DeleteOutbound)
 
@@ -231,6 +232,7 @@ func (s *Server) setupRoutes() {
 		api.GET("/routing/table", s.webHandler.RoutingTable)
 		api.POST("/routing", s.webHandler.CreateRouting)
 		api.POST("/routing/:id", s.webHandler.UpdateRouting)
+		api.POST("/routing/:id/toggle", s.webHandler.ToggleRouting)
 		api.DELETE("/routing/:id", s.webHandler.DeleteRouting)
 		api.POST("/routing/preset/:preset", s.handleImportPresetRules)
 		api.GET("/routing/geodata", s.handleGetGeoData)
@@ -301,6 +303,7 @@ func (s *Server) setupRoutes() {
 				outbounds.PUT("/:id", s.handleUpdateOutbound)
 				outbounds.DELETE("/:id", s.handleDeleteOutbound)
 				outbounds.POST("/:id/test", s.handleTestOutbound)
+				outbounds.POST("/:id/toggle", s.webHandler.ToggleOutbound)
 			}
 
 			// Routing rules
@@ -310,6 +313,7 @@ func (s *Server) setupRoutes() {
 				routing.POST("", s.handleCreateRoutingRule)
 				routing.PUT("/:id", s.handleUpdateRoutingRule)
 				routing.DELETE("/:id", s.handleDeleteRoutingRule)
+				routing.POST("/:id/toggle", s.webHandler.ToggleRouting)
 				routing.GET("/geodata", s.handleGetGeoData)
 			}
 

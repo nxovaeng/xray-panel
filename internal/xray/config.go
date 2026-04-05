@@ -305,6 +305,32 @@ func (g *Generator) GenerateJSON() ([]byte, error) {
 	return json.MarshalIndent(config, "", "  ")
 }
 
+// GenerateTestJSON builds a minimal Xray config for outbound connectivity testing.
+// It creates a simple HTTP proxy inbound on the given port, wires it to the configured
+// outbound(s), and skips the complex inbound generation (API, stats, etc.).
+func (g *Generator) GenerateTestJSON(httpProxyPort int) ([]byte, error) {
+	// Minimal config: just log + inbound + outbound(s) + routing
+	testConfig := map[string]interface{}{
+		"log": map[string]interface{}{
+			"loglevel": "warning",
+		},
+		"inbounds": []map[string]interface{}{
+			{
+				"tag":      "test-http-in",
+				"listen":   "127.0.0.1",
+				"port":     httpProxyPort,
+				"protocol": "http",
+			},
+		},
+		"outbounds": g.generateOutbounds(),
+		"routing": map[string]interface{}{
+			"domainStrategy": "IPIfNonMatch",
+		},
+	}
+
+	return json.MarshalIndent(testConfig, "", "  ")
+}
+
 // generateAPIInbound creates the API inbound
 func (g *Generator) generateAPIInbound() InboundConfig {
 	return InboundConfig{

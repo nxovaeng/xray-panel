@@ -1,4 +1,4 @@
-﻿{{define "components/routing-table.html"}}
+{{define "components/routing-table.html"}}
 <table class="data-table">
     <thead>
         <tr>
@@ -12,7 +12,7 @@
     </thead>
     <tbody>
         {{range .Rules}}
-        <tr id="rule-{{.ID}}">
+        <tr id="rule-{{.ID}}" {{if not .Enabled}}style="opacity: 0.5;"{{end}}>
             <td>
                 <code style="color: var(--accent); border-color: rgba(99, 102, 241, 0.2);">{{.Name}}</code>
                 {{if .Remark}}
@@ -83,6 +83,14 @@
             </td>
             <td>
                 <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-sm btn-outline"
+                        style="{{if .Enabled}}color: var(--success); border-color: rgba(34,197,94,0.3);{{else}}color: var(--danger); border-color: rgba(239,68,68,0.3);{{end}}"
+                        hx-post="/api/routing/{{.ID}}/toggle"
+                        hx-target="#routing-table"
+                        hx-swap="innerHTML"
+                        title="{{if .Enabled}}点击禁用{{else}}点击启用{{end}}">
+                        <i data-lucide="{{if .Enabled}}check-circle{{else}}x-circle{{end}}" style="width: 16px; height: 16px;"></i>
+                    </button>
                     <button hx-get="/routing/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑路由规则')"
                         class="btn btn-sm btn-outline" title="编辑">
                         <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>

@@ -984,6 +984,7 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 		return
 	}
 	outbound.ID = existing.ID
+	outbound.Enabled = existing.Enabled // Preserve enabled status
 	if err := h.db.Save(&outbound).Error; err != nil {
 		logger.Error("Failed to update outbound %s: %v", id, err)
 		c.String(http.StatusInternalServerError, "Error updating outbound: "+err.Error())
@@ -991,6 +992,26 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 	}
 
 	logger.Info("Outbound updated: %s", outbound.Tag)
+	h.OutboundsTable(c)
+}
+
+func (h *Handler) ToggleOutbound(c *gin.Context) {
+	id := c.Param("id")
+
+	var outbound models.Outbound
+	if err := h.db.First(&outbound, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Outbound not found")
+		return
+	}
+
+	outbound.Enabled = !outbound.Enabled
+	if err := h.db.Save(&outbound).Error; err != nil {
+		logger.Error("Failed to toggle outbound %s: %v", id, err)
+		c.String(http.StatusInternalServerError, "Error toggling outbound")
+		return
+	}
+
+	logger.Info("Outbound toggled: %s (Enabled: %v)", outbound.Tag, outbound.Enabled)
 	h.OutboundsTable(c)
 }
 
@@ -1082,11 +1103,32 @@ func (h *Handler) UpdateRouting(c *gin.Context) {
 		return
 	}
 	rule.ID = existing.ID
+	rule.Enabled = existing.Enabled // Preserve enabled status
 	if err := h.db.Save(&rule).Error; err != nil {
 		c.String(http.StatusInternalServerError, "Error updating routing rule")
 		return
 	}
 
+	h.RoutingTable(c)
+}
+
+func (h *Handler) ToggleRouting(c *gin.Context) {
+	id := c.Param("id")
+
+	var rule models.RoutingRule
+	if err := h.db.First(&rule, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Routing rule not found")
+		return
+	}
+
+	rule.Enabled = !rule.Enabled
+	if err := h.db.Save(&rule).Error; err != nil {
+		logger.Error("Failed to toggle routing rule %s: %v", id, err)
+		c.String(http.StatusInternalServerError, "Error toggling routing rule")
+		return
+	}
+
+	logger.Info("Routing rule toggled: %s (Enabled: %v)", rule.Name, rule.Enabled)
 	h.RoutingTable(c)
 }
 

@@ -1,16 +1,20 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"xray-panel/internal/models"
+	"xray-panel/internal/xray"
 )
 
 // CreateOutboundRequest represents the request to create an outbound
@@ -261,7 +265,7 @@ func (s *Server) handleTestOutbound(c *gin.Context) {
 		return
 	}
 
-	result := testOutboundConnectivity(outbound)
+	result := s.testOutboundViaXray(outbound)
 	c.JSON(http.StatusOK, result)
 }
 
@@ -273,269 +277,93 @@ type OutboundTestResult struct {
 	Endpoint string `json:"endpoint,omitempty"`
 }
 
-// testOutboundConnectivity tests the connectivity of an outbound
-func testOutboundConnectivity(outbound models.Outbound) OutboundTestResult {
-	switch outbound.Type {
-	case models.OutboundWireGuard:
-		return testWireGuardConnectivity(outbound)
-	case models.OutboundSOCKS5:
-		return testSOCKS5Connectivity(outbound)
-	case models.OutboundTrojan:
-		return testTrojanConnectivity(outbound)
-	case models.OutboundVLESS, models.OutboundVMess:
-		return testGenericTCPConnectivity(outbound)
-	default:
-		return OutboundTestResult{
-			Success: false,
-			Message: "Unsupported outbound type for testing",
-		}
-	}
-}
-
-// testWireGuardConnectivity tests WireGuard endpoint connectivity.
-// Sends a UDP probe and checks for ICMP unreachable errors.
-// WireGuard silently drops invalid packets, so a timeout = endpoint likely alive.
-func testWireGuardConnectivity(outbound models.Outbound) OutboundTestResult {
-	if outbound.Server == "" {
-		return OutboundTestResult{
-			Success: false,
-			Message: "WireGuard server address not configured",
-		}
+// testOutboundViaXray runs an ephemeral Xray proxy process and routes HTTP traffic through it.
+// This executes a "True Dial Test" which verifies authentic reachability instead of false-positive Pings.
+func (s *Server) testOutboundViaXray(outbound models.Outbound) OutboundTestResult {
+	endpoint := outbound.Server
+	if outbound.Port > 0 {
+		endpoint = fmt.Sprintf("%s:%d", outbound.Server, outbound.Port)
 	}
 
-	if outbound.Port == 0 {
-		return OutboundTestResult{
-			Success: false,
-			Message: "WireGuard port not configured",
-		}
-	}
-
-	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
-
-	// Resolve DNS first
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var resolver net.Resolver
-	ips, err := resolver.LookupHost(ctx, outbound.Server)
+	// 1. Get a random free port for our local HTTP proxy
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		if net.ParseIP(outbound.Server) == nil {
-			return OutboundTestResult{
-				Success:  false,
-				Message:  fmt.Sprintf("DNS resolution failed: %v", err),
-				Endpoint: endpoint,
-			}
-		}
-		ips = []string{outbound.Server}
+		return OutboundTestResult{Success: false, Message: "Failed to allocate local port: " + err.Error(), Endpoint: endpoint}
+	}
+	proxyPort := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	// 2. Build a minimal Xray config JSON directly
+	//    (The Generator only handles vless/trojan/wireguard inbounds,
+	//     so we construct the test config by hand.)
+	outbound.Enabled = true // Force enable for test
+
+	gen := xray.NewGenerator()
+	gen.SetOutbounds([]models.Outbound{outbound})
+
+	// Use the generator only for the outbound section
+	configJSON, err := gen.GenerateTestJSON(proxyPort)
+	if err != nil {
+		return OutboundTestResult{Success: false, Message: "Config build failed: " + err.Error(), Endpoint: endpoint}
 	}
 
-	// Send a UDP probe to the WireGuard endpoint
-	for _, ip := range ips {
-		addr := net.JoinHostPort(ip, fmt.Sprintf("%d", outbound.Port))
-		start := time.Now()
+	// 3. Write temporary config file
+	tempPath := filepath.Join(os.TempDir(), fmt.Sprintf("xray_test_%s.json", outbound.ID))
+	err = os.WriteFile(tempPath, configJSON, 0600)
+	if err != nil {
+		return OutboundTestResult{Success: false, Message: "Write temp file failed: " + err.Error(), Endpoint: endpoint}
+	}
+	defer os.Remove(tempPath)
 
-		conn, err := net.DialTimeout("udp", addr, 3*time.Second)
-		if err != nil {
-			continue
-		}
-
-		// Send a small probe packet (not a valid WireGuard handshake,
-		// but WireGuard will silently drop it rather than rejecting)
-		conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-		_, err = conn.Write([]byte{0x01, 0x00, 0x00, 0x00})
-		if err != nil {
-			conn.Close()
-			return OutboundTestResult{
-				Success:  false,
-				Message:  fmt.Sprintf("UDP send failed: %v", err),
-				Endpoint: endpoint,
-			}
-		}
-
-		// Wait briefly for ICMP unreachable (port closed) or timeout (port open/filtered)
-		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		buf := make([]byte, 64)
-		_, readErr := conn.Read(buf)
-		conn.Close()
-
-		latency := time.Since(start).Milliseconds()
-
-		if readErr != nil {
-			// Timeout = no ICMP error = endpoint likely alive (WireGuard drops invalid packets silently)
-			if netErr, ok := readErr.(net.Error); ok && netErr.Timeout() {
-				return OutboundTestResult{
-					Success:  true,
-					Message:  fmt.Sprintf("UDP endpoint reachable, no ICMP rejection (IP: %s)", ip),
-					Latency:  latency,
-					Endpoint: endpoint,
-				}
-			}
-			// Connection refused = port is closed, no WireGuard here
-			if strings.Contains(readErr.Error(), "connection refused") {
-				return OutboundTestResult{
-					Success:  false,
-					Message:  fmt.Sprintf("UDP port closed (ICMP unreachable, IP: %s)", ip),
-					Latency:  latency,
-					Endpoint: endpoint,
-				}
-			}
-			// Other error — still likely reachable
-			return OutboundTestResult{
-				Success:  true,
-				Message:  fmt.Sprintf("UDP endpoint reachable (IP: %s, note: %v)", ip, readErr),
-				Latency:  latency,
-				Endpoint: endpoint,
-			}
-		}
-
-		// Got a response (unusual for WireGuard with invalid packet)
-		return OutboundTestResult{
-			Success:  true,
-			Message:  fmt.Sprintf("UDP endpoint responded (IP: %s)", ip),
-			Latency:  latency,
-			Endpoint: endpoint,
-		}
+	// 4. Start Xray background process
+	binaryPath := s.config.Xray.BinaryPath
+	if binaryPath == "" {
+		binaryPath = "/usr/local/bin/xray"
+	}
+	cmd := exec.Command(binaryPath, "run", "-c", tempPath)
+	err = cmd.Start()
+	if err != nil {
+		return OutboundTestResult{Success: false, Message: "Start Xray failed: " + err.Error(), Endpoint: endpoint}
 	}
 
-	return OutboundTestResult{
-		Success:  false,
-		Message:  "Failed to reach WireGuard endpoint via UDP",
-		Endpoint: endpoint,
-	}
-}
+	// Ensure we kill the Xray child process when done
+	defer func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}()
 
-// testSOCKS5Connectivity tests SOCKS5 proxy connectivity
-func testSOCKS5Connectivity(outbound models.Outbound) OutboundTestResult {
-	if outbound.Server == "" || outbound.Port == 0 {
-		return OutboundTestResult{
-			Success: false,
-			Message: "SOCKS5 server address or port not configured",
-		}
+	// Give Xray time to initialize
+	time.Sleep(1000 * time.Millisecond)
+
+	// 5. Test HTTP Proxy
+	proxyURL, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", proxyPort))
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		},
+		Timeout: 5 * time.Second,
 	}
 
-	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
 	start := time.Now()
-
-	// Test TCP connectivity to SOCKS5 proxy
-	conn, err := net.DialTimeout("tcp", endpoint, 5*time.Second)
-	if err != nil {
-		return OutboundTestResult{
-			Success:  false,
-			Message:  fmt.Sprintf("Connection failed: %v", err),
-			Endpoint: endpoint,
-		}
-	}
-	defer conn.Close()
-
+	resp, err := client.Get("http://cp.cloudflare.com/generate_204")
 	latency := time.Since(start).Milliseconds()
 
-	// Try to read SOCKS5 greeting
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
-
-	// Send SOCKS5 greeting (version 5, 1 auth method, no auth)
-	_, err = conn.Write([]byte{0x05, 0x01, 0x00})
 	if err != nil {
-		return OutboundTestResult{
-			Success:  true,
-			Message:  "TCP connection successful, but SOCKS5 handshake failed",
-			Latency:  latency,
-			Endpoint: endpoint,
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "deadline exceeded") || strings.Contains(errMsg, "timeout") {
+			errMsg = "Connection timed out (Check server/firewall/password)"
+		} else if strings.Contains(errMsg, "connection refused") {
+			errMsg = "Connection refused by proxy server"
 		}
+		return OutboundTestResult{Success: false, Message: "Test failed: " + errMsg, Endpoint: endpoint, Latency: latency}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 204 || resp.StatusCode == 200 {
+		return OutboundTestResult{Success: true, Message: "Connected successfully (True Dial Test)", Latency: latency, Endpoint: endpoint}
 	}
 
-	// Read response
-	buf := make([]byte, 2)
-	_, err = conn.Read(buf)
-	if err != nil {
-		return OutboundTestResult{
-			Success:  true,
-			Message:  "TCP connection successful, SOCKS5 response timeout",
-			Latency:  latency,
-			Endpoint: endpoint,
-		}
-	}
-
-	if buf[0] == 0x05 {
-		return OutboundTestResult{
-			Success:  true,
-			Message:  "SOCKS5 proxy is responding correctly",
-			Latency:  latency,
-			Endpoint: endpoint,
-		}
-	}
-
-	return OutboundTestResult{
-		Success:  true,
-		Message:  fmt.Sprintf("TCP connection successful, unexpected response: %v", buf),
-		Latency:  latency,
-		Endpoint: endpoint,
-	}
-}
-
-// testTrojanConnectivity tests Trojan server connectivity
-func testTrojanConnectivity(outbound models.Outbound) OutboundTestResult {
-	if outbound.Server == "" || outbound.Port == 0 {
-		return OutboundTestResult{
-			Success: false,
-			Message: "Trojan server address or port not configured",
-		}
-	}
-
-	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
-	start := time.Now()
-
-	// Test TCP connectivity to Trojan server
-	conn, err := net.DialTimeout("tcp", endpoint, 5*time.Second)
-	if err != nil {
-		return OutboundTestResult{
-			Success:  false,
-			Message:  fmt.Sprintf("Connection failed: %v", err),
-			Endpoint: endpoint,
-		}
-	}
-	defer conn.Close()
-
-	latency := time.Since(start).Milliseconds()
-
-	return OutboundTestResult{
-		Success:  true,
-		Message:  "TCP connection to Trojan server successful",
-		Latency:  latency,
-		Endpoint: endpoint,
-	}
-}
-
-// testGenericTCPConnectivity tests basic TCP connectivity for VLESS/VMess
-func testGenericTCPConnectivity(outbound models.Outbound) OutboundTestResult {
-	if outbound.Server == "" || outbound.Port == 0 {
-		return OutboundTestResult{
-			Success: false,
-			Message: "Server address or port not configured",
-		}
-	}
-
-	endpoint := net.JoinHostPort(outbound.Server, fmt.Sprintf("%d", outbound.Port))
-	start := time.Now()
-
-	// Test TCP connectivity
-	conn, err := net.DialTimeout("tcp", endpoint, 5*time.Second)
-	if err != nil {
-		return OutboundTestResult{
-			Success:  false,
-			Message:  fmt.Sprintf("TCP connection failed: %v", err),
-			Endpoint: endpoint,
-		}
-	}
-	defer conn.Close()
-
-	latency := time.Since(start).Milliseconds()
-
-	return OutboundTestResult{
-		Success:  true,
-		Message:  fmt.Sprintf("TCP connection to %s successful", outbound.Type),
-		Latency:  latency,
-		Endpoint: endpoint,
-	}
+	return OutboundTestResult{Success: false, Message: fmt.Sprintf("Unexpected HTTP status: %d", resp.StatusCode), Latency: latency, Endpoint: endpoint}
 }
 
 // parseWireGuardConfig parses a WireGuard configuration string (from ProtonVPN, etc.)
