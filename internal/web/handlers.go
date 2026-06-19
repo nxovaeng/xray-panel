@@ -455,18 +455,14 @@ func (h *Handler) WGClientConfig(c *gin.Context) {
 
 	// Get server IP
 	serverIP := ""
-	sysInfo, err := system.GetSystemInfo()
-	if err == nil {
-		// Just a placeholder, actually need public IP, we use c.Request.Host
-		host := c.GetHeader("X-Forwarded-Host")
-		if host == "" {
-			host = c.Request.Host
-		}
-		if idx := strings.Index(host, ":"); idx != -1 {
-			host = host[:idx]
-		}
-		serverIP = host
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
 	}
+	if idx := strings.Index(host, ":"); idx != -1 {
+		host = host[:idx]
+	}
+	serverIP = host
 
 	c.HTML(http.StatusOK, "components/wg-client-config.html", gin.H{
 		"Inbound":  inbound,
