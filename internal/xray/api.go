@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -94,22 +95,14 @@ func (c *APIClient) GetStats(name string, reset bool) (int64, error) {
 		return 0, nil
 	}
 
-	// Parse output - format is like:
-	// stat: <
-	//   name: "user>>>test@example.com>>>traffic>>>downlink"
-	//   value: 12345
-	// >
+	// Parse output - can be protobuf text format or JSON
+	// e.g. value: 12345 or "value": "12345" or "value": 12345
 	outputStr := string(output)
-	lines := strings.Split(outputStr, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "value:") {
-			valueStr := strings.TrimPrefix(line, "value:")
-			valueStr = strings.TrimSpace(valueStr)
-			value, err := strconv.ParseInt(valueStr, 10, 64)
-			if err != nil {
-				return 0, nil
-			}
+	re := regexp.MustCompile(`(?i)"?value"?:\s*"?(\d+)"?`)
+	matches := re.FindStringSubmatch(outputStr)
+	if len(matches) > 1 {
+		value, err := strconv.ParseInt(matches[1], 10, 64)
+		if err == nil {
 			return value, nil
 		}
 	}

@@ -1,11 +1,11 @@
-﻿{{define "components/domains-table.html"}}
+{{define "components/domains-table.html"}}
 <table class="data-table">
     <thead>
         <tr>
             <th>域名</th>
             <th>类型</th>
             <th>证书路径</th>
-            <th>密钥路径</th>
+            <th>过期时间</th>
             <th>操作</th>
         </tr>
     </thead>
@@ -32,13 +32,20 @@
             </td>
             <td>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                    <code style="font-size: 0.875rem;">{{.CertPath}}</code>
+                    <code style="font-size: 0.875rem;" title="{{.KeyPath}}">{{.CertPath}}</code>
                 </div>
             </td>
             <td>
+                {{if .HasCert}}
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                    <code style="font-size: 0.875rem;">{{.KeyPath}}</code>
+                    <span style="font-size: 0.875rem;">{{.ExpiryDate}}</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">
+                        {{if gt .DaysToExpiry 0}}还有 {{.DaysToExpiry}} 天{{else if eq .DaysToExpiry 0}}今天过期{{else}}已过期{{end}}
+                    </span>
                 </div>
+                {{else}}
+                <span style="color: var(--text-secondary);">-</span>
+                {{end}}
             </td>
             <td>
                 <div style="display: flex; gap: 0.5rem;">

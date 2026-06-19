@@ -56,6 +56,12 @@
                         title="{{if .Enabled}}点击禁用{{else}}点击启用{{end}}">
                         <i data-lucide="{{if .Enabled}}check-circle{{else}}x-circle{{end}}" style="width: 16px; height: 16px;"></i>
                     </button>
+                    {{if eq .Protocol "wireguard"}}
+                    <button hx-get="/inbounds/{{.ID}}/wg-client" hx-target="#modal-body" onclick="openModal('WireGuard 客户端配置')"
+                        class="btn btn-sm btn-outline" style="color: var(--accent); border-color: rgba(99, 102, 241, 0.3);" title="客户端配置">
+                        <i data-lucide="file-code" style="width: 16px; height: 16px;"></i>
+                    </button>
+                    {{end}}
                     <button hx-get="/inbounds/{{.ID}}/edit" hx-target="#modal-body" onclick="openModal('编辑入站')"
                         class="btn btn-sm btn-outline" title="编辑">
                         <i data-lucide="edit-2" style="width: 16px; height: 16px;"></i>

@@ -434,6 +434,47 @@ func (h *Handler) EditInboundForm(c *gin.Context) {
 	})
 }
 
+func (h *Handler) WGClientConfig(c *gin.Context) {
+	id := c.Param("id")
+	var inbound models.Inbound
+	if err := h.db.First(&inbound, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Inbound not found")
+		return
+	}
+
+	if inbound.Protocol != models.ProtocolWireGuard {
+		c.String(http.StatusBadRequest, "Not a WireGuard inbound")
+		return
+	}
+
+	// Calculate a simple peer IP, e.g., if local is 10.0.0.1/24, peer could be 10.0.0.2/32
+	peerIP := "10.0.0.2/32"
+	if strings.HasPrefix(inbound.WGLocalIP, "10.0.0.") {
+		peerIP = "10.0.0.2/32"
+	}
+
+	// Get server IP
+	serverIP := ""
+	sysInfo, err := system.GetSystemInfo()
+	if err == nil {
+		// Just a placeholder, actually need public IP, we use c.Request.Host
+		host := c.GetHeader("X-Forwarded-Host")
+		if host == "" {
+			host = c.Request.Host
+		}
+		if idx := strings.Index(host, ":"); idx != -1 {
+			host = host[:idx]
+		}
+		serverIP = host
+	}
+
+	c.HTML(http.StatusOK, "components/wg-client-config.html", gin.H{
+		"Inbound":  inbound,
+		"PeerIP":   peerIP,
+		"ServerIP": serverIP,
+	})
+}
+
 func (h *Handler) CreateInbound(c *gin.Context) {
 	var inbound models.Inbound
 	if err := c.ShouldBind(&inbound); err != nil {
@@ -702,8 +743,32 @@ func (h *Handler) DomainsTable(c *gin.Context) {
 		return
 	}
 
+	type DomainView struct {
+		models.Domain
+		ExpiryDate   string
+		DaysToExpiry int
+		HasCert      bool
+	}
+
+	domainViews := make([]DomainView, len(domains))
+	for i, d := range domains {
+		view := DomainView{
+			Domain:  d,
+			HasCert: false,
+		}
+		
+		if d.CertPath != "" {
+			if expiry, err := utils.ParseCertificateExpiry(d.CertPath); err == nil {
+				view.HasCert = true
+				view.ExpiryDate = expiry.Format("2006-01-02")
+				view.DaysToExpiry = int(time.Until(expiry).Hours() / 24)
+			}
+		}
+		domainViews[i] = view
+	}
+
 	c.HTML(http.StatusOK, "components/domains-table.html", gin.H{
-		"Domains": domains,
+		"Domains": domainViews,
 	})
 }
 

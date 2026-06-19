@@ -175,6 +175,7 @@ func (s *Server) setupRoutes() {
 		// Inbound forms
 		forms.GET("/inbounds/new", s.webHandler.NewInboundForm)
 		forms.GET("/inbounds/:id/edit", s.webHandler.EditInboundForm)
+		forms.GET("/inbounds/:id/wg-client", s.webHandler.WGClientConfig)
 
 		// Outbound forms
 		forms.GET("/outbounds/new", s.webHandler.NewOutboundForm)

@@ -1,0 +1,39 @@
+{{define "components/wg-client-config.html"}}
+<div>
+    <div style="margin-bottom: 1rem;">
+        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">WireGuard 客户端配置参考</h3>
+        <p style="color: var(--text-secondary); font-size: 0.875rem; margin: 0;">
+            由于服务端只保存了客户端的公钥，以下配置中的 <code>&lt;客户端私钥&gt;</code> 需要您自行替换为您生成客户端公钥时对应的私钥。
+        </p>
+    </div>
+
+    <div style="position: relative;">
+        <pre style="background: rgba(0, 0, 0, 0.2); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); overflow-x: auto; color: var(--text-primary); font-family: monospace; font-size: 0.875rem; line-height: 1.5; margin: 0;" id="wg-config-code">[Interface]
+PrivateKey = &lt;客户端私钥&gt;
+Address = {{.PeerIP}}
+DNS = 1.1.1.1
+
+[Peer]
+PublicKey = {{.Inbound.WGPublicKey}}
+Endpoint = {{.ServerIP}}:{{.Inbound.Port}}
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+{{if gt .Inbound.WGMTU 0}}MTU = {{.Inbound.WGMTU}}{{end}}</pre>
+        <button class="btn btn-sm btn-primary" style="position: absolute; top: 0.5rem; right: 0.5rem;" onclick="copyWgConfig()" title="复制配置">
+            <i data-lucide="copy" style="width: 14px; height: 14px;"></i> 复制
+        </button>
+    </div>
+</div>
+
+<script>
+function copyWgConfig() {
+    var code = document.getElementById("wg-config-code").innerText;
+    navigator.clipboard.writeText(code).then(function() {
+        showNotification("success", "已复制到剪贴板");
+    }, function(err) {
+        showNotification("error", "复制失败: " + err);
+    });
+}
+if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("div") || document.body : document.body]}); }
+</script>
+{{end}}
