@@ -45,6 +45,13 @@ func LoadTemplates(templateFS fs.FS) (*template.Template, error) {
 			}
 			return ""
 		},
+		"formatTime": func(t interface{}) string {
+			// Handle time.Time type
+			if tt, ok := t.(interface{ Format(string) string }); ok {
+				return tt.Format("2006-01-02 15:04:05")
+			}
+			return ""
+		},
 	}
 
 	tmpl := template.New("").Funcs(funcMap)
