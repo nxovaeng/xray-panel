@@ -4,6 +4,7 @@ import (
 	cryptorand "crypto/rand"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -448,10 +449,21 @@ func (h *Handler) WGClientConfig(c *gin.Context) {
 		return
 	}
 
-	// Calculate a simple peer IP, e.g., if local is 10.0.0.1/24, peer could be 10.0.0.2/32
+	// Calculate a simple peer IP based on server IP
 	peerIP := "10.0.0.2/32"
-	if strings.HasPrefix(inbound.WGLocalIP, "10.0.0.") {
-		peerIP = "10.0.0.2/32"
+	if inbound.WGLocalIP != "" {
+		ipPart := inbound.WGLocalIP
+		if idx := strings.Index(ipPart, "/"); idx != -1 {
+			ipPart = ipPart[:idx]
+		}
+		ip := net.ParseIP(ipPart)
+		if ip != nil {
+			ip = ip.To4()
+			if ip != nil {
+				ip[3]++ // Increment last octet
+				peerIP = ip.String() + "/32"
+			}
+		}
 	}
 
 	// Get server IP

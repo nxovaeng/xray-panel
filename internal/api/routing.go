@@ -67,11 +67,8 @@ func (s *Server) handleImportSingleCert(c *gin.Context) {
 		}
 	}
 
-	var domains []models.Domain
-	s.db.Order("created_at DESC").Find(&domains)
-
-	c.Header("HX-Trigger", `{"showNotification": {"type": "success", "message": "证书已导入"}}`)
-	c.HTML(http.StatusOK, "components/domains-table.html", gin.H{"Domains": domains})
+	c.Header("HX-Trigger", `{"showNotification": {"type": "success", "message": "Certificate imported"}}`)
+	s.webHandler.DomainsTable(c)
 }
 
 // handleImportPresetRules imports preset routing rules
@@ -520,25 +517,10 @@ func (s *Server) handleScanAndImportCertificates(c *gin.Context) {
 		importedCount++
 	}
 
-	// Return updated domains table
-	var domains []models.Domain
-	if err := s.db.Order("created_at DESC").Find(&domains).Error; err != nil {
-		c.String(http.StatusInternalServerError, "加载域名列表失败")
-		return
-	}
-
-	// Build notification message
-	message := fmt.Sprintf("导入完成：新增 %d 个，跳过 %d 个", importedCount, skippedCount)
-	if len(importErrors) > 0 {
-		message += fmt.Sprintf("，失败 %d 个", len(importErrors))
-	}
-
 	// Set response header to notify about import results
-	c.Header("HX-Trigger", fmt.Sprintf(`{"showNotification": {"type": "success", "message": "%s"}}`, message))
+	c.Header("HX-Trigger", fmt.Sprintf(`{"showNotification": {"type": "success", "message": "Import complete: %d added, %d skipped"}}`, importedCount, skippedCount))
 
-	c.HTML(http.StatusOK, "components/domains-table.html", gin.H{
-		"Domains": domains,
-	})
+	s.webHandler.DomainsTable(c)
 }
 
 // fileExists checks if a file exists
