@@ -105,13 +105,13 @@ func (s *Server) handleSubscription(c *gin.Context) {
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s.txt", filename))
 		c.String(http.StatusOK, encoded)
 
-	case "plain", "txt":
+	case "plain", "txt", "t":
 		// Plain text format
 		c.Header("Content-Type", "text/plain; charset=utf-8")
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s.txt", filename))
 		c.String(http.StatusOK, result)
 
-	case "json":
+	case "json", "j":
 		// JSON format with detailed info
 		jsonOK(c, gin.H{
 			"links": links,
@@ -132,15 +132,15 @@ func (s *Server) handleSubscription(c *gin.Context) {
 			},
 		})
 
-	case "clash":
-		// Clash format (YAML)
+	case "yaml", "y", "clash":
+		// YAML proxy config format
 		clashConfig := generateClashConfig(user, inbounds)
 		c.Header("Content-Type", "text/yaml; charset=utf-8")
 		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", filename))
 		c.String(http.StatusOK, clashConfig)
 
 	default:
-		c.String(http.StatusBadRequest, "Unknown format. Supported: base64, plain, json, clash")
+		c.String(http.StatusBadRequest, "Unknown format. Supported: base64, txt, json, yaml")
 	}
 }
 

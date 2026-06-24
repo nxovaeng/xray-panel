@@ -97,7 +97,7 @@
                         <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
                             <input type="text" 
                                    id="sub-url-plain-{{.ID}}" 
-                                   value="{{.SubURL}}/plain" 
+                                   value="{{.SubURL}}/txt" 
                                    readonly 
                                    style="flex: 1; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.85rem;"
                                    onclick="this.select()">
@@ -105,7 +105,7 @@
                                 <i data-lucide="copy" style="width: 16px; height: 16px;"></i>
                                 复制
                             </button>
-                            <button onclick="loadPlainContent('{{.ID}}', '{{.SubURL}}/plain')" class="btn btn-sm btn-outline" title="查看内容">
+                            <button onclick="loadPlainContent('{{.ID}}', '{{.SubURL}}/txt')" class="btn btn-sm btn-outline" title="查看内容">
                                 <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
                                 查看
                             </button>
@@ -128,12 +128,12 @@
                     <!-- Clash Subscription Links -->
                     <div style="margin-bottom: 1.25rem;">
                         <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                            Clash 订阅链接 (仅代理节点)
+                            Clash/Mihomo 订阅链接
                         </label>
                         <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
                             <input type="text" 
                                    id="sub-url-clash-{{.ID}}" 
-                                   value="{{.SubURL}}/clash" 
+                                   value="{{.SubURL}}/yaml" 
                                    readonly 
                                    style="flex: 1; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.85rem;"
                                    onclick="this.select()">

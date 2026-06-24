@@ -50,9 +50,8 @@
                         <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
                             切换模式后需要保存并应用配置才能完整生效。</p>
                     </div>
-
-                    <div class="form-group" id="client-routing-mode-container" style="display: {{if eq .PanelMode "
-                        client"}}block{{else}}none{{end}};">
+                    <div class="form-group" id="client-routing-mode-container"
+                        style='display: {{if eq .PanelMode "client"}}block{{else}}none{{end}};'>
                         <label>客户端路由模式 <span class="badge badge-info" style="font-size: 0.7em;">仅客户端生效</span></label>
                         <select id="client-routing-mode" class="form-control" style="max-width: 300px;">
                             <option value="white" {{if eq .ClientRoutingMode "white" }}selected{{end}}>绕过大陆 (默认直连CN)
@@ -82,6 +81,15 @@
                         </select>
                         <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
                             控制直连流量时优先使用的 IP 版本。默认推荐 UseIPv4 防止很多国外 VPS 的半残 IPv6 导致连接超时卡顿。
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>订阅路径前缀</label>
+                        <input type="text" id="sub-path" class="form-control" style="max-width: 200px;"
+                            value="{{.SubPath}}" placeholder="/d">
+                        <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
+                            订阅 URL 路径前缀，避免使用 <code>/sub</code>、<code>/clash</code> 等易识别的路径。修改后需重启面板生效。
                         </p>
                     </div>
 
@@ -163,6 +171,7 @@
             const mode = document.getElementById('panel-mode').value;
             const routingMode = document.getElementById('client-routing-mode').value;
             const directDomainStrategy = document.getElementById('direct-domain-strategy').value;
+            const subPath = document.getElementById('sub-path').value.trim() || '/d';
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 保存中...';
             btn.disabled = true;
@@ -176,7 +185,8 @@
                 body: JSON.stringify({
                     panel_mode: mode,
                     client_routing_mode: routingMode,
-                    direct_domain_strategy: directDomainStrategy
+                    direct_domain_strategy: directDomainStrategy,
+                    sub_path: subPath
                 }),
                 credentials: 'same-origin'
             })

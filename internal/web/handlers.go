@@ -51,6 +51,7 @@ func (h *Handler) renderPage(c *gin.Context, template string, data gin.H) {
 	data["PanelMode"] = models.GetPanelMode(h.db)
 	data["ClientRoutingMode"] = models.GetClientRoutingMode(h.db)
 	data["DirectDomainStrategy"] = models.GetDirectDomainStrategy(h.db)
+	data["SubPath"] = models.GetSubPath(h.db)
 
 	c.HTML(http.StatusOK, template, data)
 }
@@ -200,9 +201,11 @@ func (h *Handler) UsersTable(c *gin.Context) {
 	}
 	baseURL := scheme + "://" + host
 
+	subPrefix := models.GetSubPath(h.db)
+
 	userViews := make([]UserView, len(users))
 	for i, u := range users {
-		subURL := baseURL + "/sub/" + u.SubPath
+		subURL := baseURL + subPrefix + "/" + u.SubPath
 		expiryDate := ""
 		if !u.ExpiryDate.IsZero() {
 			expiryDate = u.ExpiryDate.Format("2006-01-02")

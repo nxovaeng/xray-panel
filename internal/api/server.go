@@ -13,6 +13,7 @@ import (
 	xraypanel "xray-panel"
 	"xray-panel/internal/config"
 	"xray-panel/internal/logger"
+	"xray-panel/internal/models"
 	"xray-panel/internal/nginx"
 	"xray-panel/internal/web"
 )
@@ -268,7 +269,9 @@ func (s *Server) setupRoutes() {
 	}
 
 	// Subscription routes (public, rate-limited)
-	subGroup := s.router.Group("/sub")
+	// Read path prefix from DB setting (default: "/d")
+	subPrefix := models.GetSubPath(s.db)
+	subGroup := s.router.Group(subPrefix)
 	subGroup.Use(func(c *gin.Context) {
 		ip := c.ClientIP()
 		// Override window for subscription: 30 req/min
