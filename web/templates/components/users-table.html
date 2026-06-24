@@ -1,4 +1,4 @@
-﻿{{define "components/users-table.html"}}
+{{define "components/users-table.html"}}
 <table class="data-table">
     <thead>
         <tr>
@@ -122,6 +122,28 @@
                         </div>
                         <small style="display: block; margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
                             未加密的节点链接，每行一个，可直接查看和复制
+                        </small>
+                    </div>
+
+                    <!-- Clash Subscription Links -->
+                    <div style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                            Clash 订阅链接 (仅代理节点)
+                        </label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                            <input type="text" 
+                                   id="sub-url-clash-{{.ID}}" 
+                                   value="{{.SubURL}}/clash" 
+                                   readonly 
+                                   style="flex: 1; padding: 0.5rem 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: monospace; font-size: 0.85rem;"
+                                   onclick="this.select()">
+                            <button onclick="copyText('sub-url-clash-{{.ID}}')" class="btn btn-sm btn-outline" title="复制">
+                                <i data-lucide="copy" style="width: 16px; height: 16px;"></i>
+                                复制
+                            </button>
+                        </div>
+                        <small style="display: block; margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
+                            包含所有可用节点的 Clash proxies YAML 配置
                         </small>
                     </div>
 

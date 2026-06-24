@@ -103,7 +103,7 @@ func (g *Generator) generateInbound(inbound models.Inbound) (*InboundConfig, err
 	listen := inbound.Listen
 	var port interface{} = inbound.Port
 	if inbound.UseUDS {
-		listen = inbound.SocketPath(g.socketDir)
+		listen = inbound.SocketPath(g.socketDir) + ",0666"
 		port = 0
 	}
 

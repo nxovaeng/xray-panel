@@ -161,7 +161,7 @@ func (c *APIClient) requestWithResponse(method, path string, payload interface{}
 // IsHealthy checks if Xray API is responding using xray api command
 func (c *APIClient) IsHealthy() bool {
 	// Try to query stats - if xray is running and API is enabled, this should work
-	cmd := exec.Command(c.xrayBinary, "api", "stats", "--server=127.0.0.1:"+strconv.Itoa(c.apiPort))
+	cmd := exec.Command(c.xrayBinary, "api", "statsquery", "--server=127.0.0.1:"+strconv.Itoa(c.apiPort))
 	err := cmd.Run()
 	// Even if there are no stats, the command should succeed if xray is running
 	return err == nil

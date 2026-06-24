@@ -86,6 +86,9 @@ func LoadTemplates(templateFS fs.FS) (*template.Template, error) {
 		"templates/components/outbound-form.html",
 		"templates/components/routing-table.html",
 		"templates/components/routing-form.html",
+		"templates/components/wg-client-config.html",
+		"templates/components/import-outbound-form.html",
+		"templates/components/certificates-scan-result.html",
 	}
 	for _, comp := range components {
 		if err := loadTemplate(tmpl, templateFS, comp); err != nil {

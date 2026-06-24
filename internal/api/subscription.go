@@ -179,7 +179,7 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 	params.Set("security", "tls")
 	params.Set("sni", sniDomain) // SNI 使用反代子域名
 	params.Set("alpn", "h2")
-	params.Set("fp", "chrome")
+	params.Set("fp", "randomized")
 
 	// Transport settings
 	switch inbound.Transport {
@@ -248,7 +248,7 @@ func generateTrojanLink(user models.User, inbound models.Inbound) string {
 	params.Set("security", "tls")
 	params.Set("sni", sniDomain)
 	params.Set("alpn", "h2")
-	params.Set("fp", "chrome")
+	params.Set("fp", "randomized")
 
 	switch inbound.Transport {
 	case models.TransportXHTTP:
@@ -342,12 +342,25 @@ func generateClashConfig(user models.User, inbounds []models.Inbound) string {
 		sb.WriteString(fmt.Sprintf("    network: %s\n", inbound.Transport))
 		sb.WriteString("    tls: true\n")
 		sb.WriteString(fmt.Sprintf("    servername: %s\n", sniDomain)) // SNI 使用反代子域名
+		sb.WriteString("    client-fingerprint: randomized\n")
+		sb.WriteString("    alpn:\n")
+		sb.WriteString("      - h2\n")
 
 		// Transport options
 		switch inbound.Transport {
+		case models.TransportXHTTP:
+			sb.WriteString("    xhttp-opts:\n")
+			sb.WriteString(fmt.Sprintf("      path: %s\n", inbound.Path))
+			if inbound.Host != "" {
+				sb.WriteString(fmt.Sprintf("      host: %s\n", inbound.Host))
+			}
 		case models.TransportWS:
 			sb.WriteString("    ws-opts:\n")
 			sb.WriteString(fmt.Sprintf("      path: %s\n", inbound.Path))
+			if inbound.Host != "" {
+				sb.WriteString("      headers:\n")
+				sb.WriteString(fmt.Sprintf("        Host: %s\n", inbound.Host))
+			}
 		case models.TransportGRPC:
 			sb.WriteString("    grpc-opts:\n")
 			sb.WriteString(fmt.Sprintf("      grpc-service-name: %s\n", inbound.ServiceName))
