@@ -52,6 +52,12 @@ func LoadTemplates(templateFS fs.FS) (*template.Template, error) {
 			}
 			return ""
 		},
+		"abs": func(n int) int {
+			if n < 0 {
+				return -n
+			}
+			return n
+		},
 	}
 
 	tmpl := template.New("").Funcs(funcMap)
