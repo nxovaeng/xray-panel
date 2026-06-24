@@ -77,6 +77,7 @@ type Generator struct {
 	socketDir         string
 	panelMode         string
 	clientRoutingMode string
+	directDomainStrategy string
 }
 
 // NewGenerator creates a new configuration generator
@@ -147,6 +148,15 @@ func (g *Generator) SetPanelMode(mode string) *Generator {
 // SetClientRoutingMode sets the client routing mode (white / black / custom)
 func (g *Generator) SetClientRoutingMode(mode string) *Generator {
 	g.clientRoutingMode = mode
+	return g
+}
+
+// SetDirectDomainStrategy sets the domain strategy for the direct outbound
+func (g *Generator) SetDirectDomainStrategy(strategy string) *Generator {
+	if strategy == "" {
+		strategy = "UseIPv4"
+	}
+	g.directDomainStrategy = strategy
 	return g
 }
 

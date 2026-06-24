@@ -78,6 +78,7 @@ func (s *Server) testOutboundViaXray(outbound models.Outbound) OutboundTestResul
 
 	gen := xray.NewGenerator()
 	gen.SetOutbounds([]models.Outbound{outbound})
+	gen.SetDirectDomainStrategy(models.GetDirectDomainStrategy(s.db))
 
 	// Use the generator only for the outbound section
 	configJSON, err := gen.GenerateTestJSON(proxyPort)

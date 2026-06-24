@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>应用配置 - Xray 面板</title>
     <link rel="stylesheet" href="/static/css/style.css">
-        <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/htmx.min.js"></script>
     <script src="/static/js/lucide.min.js"></script>
 </head>
 
@@ -51,16 +51,37 @@
                             切换模式后需要保存并应用配置才能完整生效。</p>
                     </div>
 
-                    <div class="form-group" id="client-routing-mode-container" style="display: {{if eq .PanelMode "client"}}block{{else}}none{{end}};">
+                    <div class="form-group" id="client-routing-mode-container" style="display: {{if eq .PanelMode "
+                        client"}}block{{else}}none{{end}};">
                         <label>客户端路由模式 <span class="badge badge-info" style="font-size: 0.7em;">仅客户端生效</span></label>
                         <select id="client-routing-mode" class="form-control" style="max-width: 300px;">
-                            <option value="white" {{if eq .ClientRoutingMode "white" }}selected{{end}}>绕过大陆 (默认直连CN)</option>
-                            <option value="black" {{if eq .ClientRoutingMode "black" }}selected{{end}}>黑名单 (仅代理被墙)</option>
-                            <option value="custom" {{if eq .ClientRoutingMode "custom" }}selected{{end}}>自定义 (面板路由页面)</option>
+                            <option value="white" {{if eq .ClientRoutingMode "white" }}selected{{end}}>绕过大陆 (默认直连CN)
+                            </option>
+                            <option value="black" {{if eq .ClientRoutingMode "black" }}selected{{end}}>黑名单 (仅代理被墙)
+                            </option>
+                            <option value="custom" {{if eq .ClientRoutingMode "custom" }}selected{{end}}>自定义 (面板路由页面)
+                            </option>
                         </select>
                         <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
                             <strong>绕过大陆</strong>：国内IP与域名直连，其余全部走代理 (Whitelist)。<br>
                             <strong>黑名单</strong>：全部流量默认直连，仅被墙/海外已知IP走代理 (Blacklist)。
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>直连出站解析策略 (direct domainStrategy)</label>
+                        <select id="direct-domain-strategy" class="form-control" style="max-width: 300px;">
+                            <option value="AsIs" {{if eq .DirectDomainStrategy "AsIs" }}selected{{end}}>AsIs (跟随系统默认)
+                            </option>
+                            <option value="UseIP" {{if eq .DirectDomainStrategy "UseIP" }}selected{{end}}>UseIP
+                                (Xray解析，双栈可用)</option>
+                            <option value="UseIPv4" {{if eq .DirectDomainStrategy "UseIPv4" }}selected{{end}}>UseIPv4
+                                (强制IPv4，稳定防卡推荐)</option>
+                            <option value="UseIPv6" {{if eq .DirectDomainStrategy "UseIPv6" }}selected{{end}}>UseIPv6
+                                (强制IPv6)</option>
+                        </select>
+                        <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
+                            控制直连流量时优先使用的 IP 版本。默认推荐 UseIPv4 防止很多国外 VPS 的半残 IPv6 导致连接超时卡顿。
                         </p>
                     </div>
 
@@ -113,7 +134,7 @@
     <div id="notification-container"></div>
     <script src="/static/js/app.min.js"></script>
     <script>
-        if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
+        if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
 
         // Check status on load (public API, no auth required)
         fetch('/api/xray/status')
@@ -141,10 +162,11 @@
             const btn = document.getElementById('btn-save-mode');
             const mode = document.getElementById('panel-mode').value;
             const routingMode = document.getElementById('client-routing-mode').value;
+            const directDomainStrategy = document.getElementById('direct-domain-strategy').value;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 保存中...';
             btn.disabled = true;
-            if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
+            if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
 
             fetch('/api/settings', {
                 method: 'PUT',
@@ -153,7 +175,8 @@
                 },
                 body: JSON.stringify({
                     panel_mode: mode,
-                    client_routing_mode: routingMode
+                    client_routing_mode: routingMode,
+                    direct_domain_strategy: directDomainStrategy
                 }),
                 credentials: 'same-origin'
             })
@@ -172,7 +195,7 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
+                    if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
                 });
         }
 
@@ -181,7 +204,7 @@
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 重启中...';
             btn.disabled = true;
-            if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
+            if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
 
             fetch('/api/xray/restart', {
                 method: 'POST',
@@ -199,7 +222,7 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
+                    if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
                 });
         }
 
@@ -208,7 +231,7 @@
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 应用中...';
             btn.disabled = true;
-            if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
+            if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
 
             fetch('/api/xray/apply', {
                 method: 'POST',
@@ -226,7 +249,7 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    if(window.lucide) lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[document.getElementById("btn-restart-xray"),document.getElementById("btn-apply-config"),document.getElementById("btn-save-mode")].filter(Boolean)});
+                    if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
                 });
         }
 
@@ -253,7 +276,7 @@
         }
 
         // Toggle client routing mode visibility based on panel mode
-        document.getElementById('panel-mode').addEventListener('change', function() {
+        document.getElementById('panel-mode').addEventListener('change', function () {
             const container = document.getElementById('client-routing-mode-container');
             if (this.value === 'client') {
                 container.style.display = 'block';

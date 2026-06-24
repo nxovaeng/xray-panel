@@ -257,6 +257,7 @@ func (s *Server) generateXrayConfig() ([]byte, error) {
 	}
 
 	clientRoutingMode := models.GetClientRoutingMode(s.db)
+	directDomainStrategy := models.GetDirectDomainStrategy(s.db)
 
 	generator := xray.NewGenerator()
 	generator.SetUsers(users)
@@ -268,6 +269,7 @@ func (s *Server) generateXrayConfig() ([]byte, error) {
 	generator.SetSocketDir(s.config.Xray.SocketDir)
 	generator.SetPanelMode(panelMode)
 	generator.SetClientRoutingMode(clientRoutingMode)
+	generator.SetDirectDomainStrategy(directDomainStrategy)
 
 	return generator.GenerateJSON()
 }

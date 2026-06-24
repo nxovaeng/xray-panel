@@ -34,6 +34,7 @@ func DefaultSettings() []Setting {
 		{Key: "enable_sniffing", Value: "true", Type: "bool", Remark: "Enable traffic sniffing"},
 		{Key: "default_traffic_limit", Value: "0", Type: "int", Remark: "Default traffic limit (0=unlimited)"},
 		{Key: "default_expire_days", Value: "30", Type: "int", Remark: "Default expiry days for new users"},
+		{Key: "direct_domain_strategy", Value: "UseIPv4", Type: "string", Remark: "Domain strategy for direct outbound"},
 	}
 }
 
@@ -59,4 +60,16 @@ func GetClientRoutingMode(db *gorm.DB) string {
 		return setting.Value
 	}
 	return "white"
+}
+
+// GetDirectDomainStrategy returns the domain strategy for direct outbound
+func GetDirectDomainStrategy(db *gorm.DB) string {
+	var setting Setting
+	if err := db.First(&setting, "key = ?", "direct_domain_strategy").Error; err != nil {
+		return "UseIPv4"
+	}
+	if setting.Value != "" {
+		return setting.Value
+	}
+	return "UseIPv4"
 }

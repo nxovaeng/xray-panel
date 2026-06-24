@@ -21,12 +21,17 @@ type OutboundConfig struct {
 func (g *Generator) generateOutbounds() []OutboundConfig {
 	outbounds := make([]OutboundConfig, 0)
 
+	strategy := g.directDomainStrategy
+	if strategy == "" {
+		strategy = "UseIPv4"
+	}
+
 	// Always add direct outbound first
 	outbounds = append(outbounds, OutboundConfig{
 		Tag:      "direct",
 		Protocol: "freedom",
 		Settings: map[string]interface{}{
-			"domainStrategy": "UseIPv4",
+			"domainStrategy": strategy,
 		},
 	})
 
