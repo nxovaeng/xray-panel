@@ -1112,7 +1112,7 @@ func (h *Handler) DeleteOutbound(c *gin.Context) {
 
 func (h *Handler) RoutingTable(c *gin.Context) {
 	var rules []models.RoutingRule
-	if err := h.db.Find(&rules).Error; err != nil {
+	if err := h.db.Order("priority ASC, created_at DESC").Find(&rules).Error; err != nil {
 		c.String(http.StatusInternalServerError, "Error loading routing rules")
 		return
 	}

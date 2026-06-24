@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"strings"
 )
 
 // LoadTemplates loads all HTML templates
 func LoadTemplates(templateFS fs.FS) (*template.Template, error) {
 	// Define helper functions
 	funcMap := template.FuncMap{
+		"hasPrefix": strings.HasPrefix,
 		"formatBytes": func(bytes int64) string {
 			const unit = 1024
 			if bytes < unit {
