@@ -322,6 +322,21 @@ func (g *Generator) GenerateJSON() ([]byte, error) {
 // It creates a simple HTTP proxy inbound on the given port, wires it to the configured
 // outbound(s), and skips the complex inbound generation (API, stats, etc.).
 func (g *Generator) GenerateTestJSON(httpProxyPort int) ([]byte, error) {
+	// Find the tag of the outbound we are testing (it should be the only one configured)
+	outboundTag := ""
+	if len(g.outbounds) > 0 {
+		outboundTag = g.outbounds[0].Tag
+	}
+
+	routingRules := []map[string]interface{}{}
+	if outboundTag != "" {
+		routingRules = append(routingRules, map[string]interface{}{
+			"type":        "field",
+			"inboundTag":  []string{"test-http-in"},
+			"outboundTag": outboundTag,
+		})
+	}
+
 	// Minimal config: just log + inbound + outbound(s) + routing
 	testConfig := map[string]interface{}{
 		"log": map[string]interface{}{
@@ -338,6 +353,7 @@ func (g *Generator) GenerateTestJSON(httpProxyPort int) ([]byte, error) {
 		"outbounds": g.generateOutbounds(),
 		"routing": map[string]interface{}{
 			"domainStrategy": "IPIfNonMatch",
+			"rules":          routingRules,
 		},
 	}
 
