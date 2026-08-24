@@ -124,6 +124,7 @@ func NewServer(cfg *config.Config, db *gorm.DB) *Server {
 // Run starts the server
 func (s *Server) Run() error {
 	s.startTrafficSync()
+	s.startMonthlyTrafficReset()
 	return s.router.Run(s.config.Server.Listen)
 }
 

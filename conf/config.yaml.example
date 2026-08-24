@@ -1,69 +1,39 @@
 # Xray Panel 配置文件示例
-# 复制此文件为 config.yaml 并根据实际情况修改
+# 复制此文件为 config.yaml 并按实际情况修改
 
-# Web 服务器配置
 server:
-  # 监听地址和端口（生产环境建议只监听本地，通过 Nginx 反代）
-  listen: "127.0.0.1:8082"
-  # 调试模式（生产环境必须设置为 false）
+  listen: "127.0.0.1:8082"   # 建议只监听本地，通过 Nginx 反代
   debug: false
 
-# 日志配置
 log:
-  # 日志等级: debug, info, warning, error
-  level: "info"
-  # 日志文件路径（留空则只输出到控制台）
+  level: "info"               # debug / info / warning / error
   file: "/opt/xray-panel/logs/panel.log"
-  # 单个日志文件最大大小（MB）
-  max_size: 100
-  # 保留的旧日志文件数量
+  max_size: 100               # 单文件最大 MB
   max_backups: 7
-  # 保留旧日志文件的最大天数
-  max_age: 30
-  # 是否压缩旧日志文件（gzip）
+  max_age: 30                 # 旧日志保留天数
   compress: true
 
-# 数据库配置
 database:
-  # SQLite 数据库文件路径
   path: "/opt/xray-panel/data/panel.db"
 
-# JWT 认证配置
 jwt:
-  # JWT 密钥（安装脚本会自动生成随机值，请勿使用默认值）
   secret: "change-me-please-use-random-string-min-32-chars"
-  # Token 过期时间（小时），默认 7 天
-  expire_hour: 168
+  expire_hour: 168            # Token 有效期（小时），默认 7 天
 
-# 管理员账户配置
 admin:
-  # 管理员用户名（留空则首次启动自动生成）
-  username: ""
-  # 管理员密码（留空则首次启动自动生成强密码，推荐）
-  password: ""
-  # 管理员邮箱（可选）
+  username: ""                # 留空则首次启动自动生成
+  password: ""                # 留空则首次启动自动生成强密码
   email: ""
 
-# Xray 配置
 xray:
-  # Xray 可执行文件路径
   binary_path: "/usr/local/bin/xray"
-  # Xray 配置文件路径
   config_path: "/usr/local/etc/xray/config.json"
-  # Xray 资源文件路径（geoip.dat, geosite.dat）
-  assets_path: "/usr/local/share/xray"
-  # Xray API 端口
+  assets_path: "/usr/local/share/xray"   # geoip.dat / geosite.dat
   api_port: 10085
-  # Unix Domain Socket 目录（用于 Nginx 反代，推荐 /dev/shm 提升性能）
-  socket_dir: "/dev/shm"
+  socket_dir: "/dev/shm"     # UDS 目录，/dev/shm 性能更好
 
-# Nginx 配置（可选）
 nginx:
-  # Nginx HTTP 配置目录
   config_dir: "/etc/nginx/conf.d"
-  # Nginx Stream 配置目录（用于 SNI 路由）
-  stream_dir: "/etc/nginx/stream.d"
-  # Nginx 重载命令
+  stream_dir: "/etc/nginx/stream.d"      # SNI 路由
   reload_cmd: "systemctl reload nginx"
-  # SSL 证书目录（acme.sh 默认路径）
   cert_dir: "/root/.acme.sh"

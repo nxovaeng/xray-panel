@@ -13,124 +13,85 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    name: Build linux-${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        include:
-          - os: linux
-            arch: amd64
-          - os: linux
-            arch: arm64
-          - os: windows
-            arch: amd64
-          - os: windows
-            arch: arm64
-          - os: darwin
-            arch: amd64
-          - os: darwin
-            arch: arm64
+        arch: [amd64, arm64]
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: 'go.mod'   # 从 go.mod 读取，不写死版本
+          cache: true
 
-      - name: Build binary
+      - name: Build
         env:
-          GOOS: ${{ matrix.os }}
+          GOOS: linux
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 0
         run: |
-          mkdir -p dist
-          OUTPUT="panel-${{ matrix.os }}-${{ matrix.arch }}"
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            OUTPUT="${OUTPUT}.exe"
-          fi
-          
-          echo "Building ${OUTPUT}..."
-          go build -v -trimpath \
-            -ldflags="-s -w -X main.Version=${{ github.event.inputs.version }}" \
-            -o "dist/${OUTPUT}" \
+          BUILD_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          go build -trimpath \
+            -ldflags="-s -w \
+              -X main.Version=${{ github.event.inputs.version }} \
+              -X main.BuildTime=${BUILD_TIME}" \
+            -o "dist/panel-linux-${{ matrix.arch }}" \
             ./cmd/panel
-          
-          echo "Build complete:"
-          ls -lh dist/
+          echo "Binary size: $(du -sh dist/panel-linux-${{ matrix.arch }} | cut -f1)"
 
-      - name: Create package
+      - name: Package
         run: |
+          VERSION="${{ github.event.inputs.version }}"
+          ARCH="${{ matrix.arch }}"
+          PKG="xray-panel-${VERSION}-linux-${ARCH}"
+
+          mkdir -p "dist/${PKG}/conf" "dist/${PKG}/scripts"
+
+          # 二进制
+          cp "dist/panel-linux-${ARCH}" "dist/${PKG}/"
+          chmod +x "dist/${PKG}/panel-linux-${ARCH}"
+
+          # 配置模板（只保留通用示例）
+          cp conf/config.yaml.example "dist/${PKG}/conf/"
+
+          # 脚本
+          cp scripts/install.sh "dist/${PKG}/scripts/"
+          chmod +x "dist/${PKG}/scripts/install.sh"
+
+          # 根目录管理脚本（方便直接在包内调用）
+          cp xray-panel.sh "dist/${PKG}/"
+          chmod +x "dist/${PKG}/xray-panel.sh"
+
+          # 文档
+          cp README.md "dist/${PKG}/" 2>/dev/null || true
+
+          # 打包 + 校验
           cd dist
-          BINARY="panel-${{ matrix.os }}-${{ matrix.arch }}"
-          [ "${{ matrix.os }}" = "windows" ] && BINARY="${BINARY}.exe"
-          PACKAGE="xray-panel-${{ github.event.inputs.version }}-${{ matrix.os }}-${{ matrix.arch }}"
-          
-          echo "Creating package: ${PACKAGE}"
-          
-          # Create directory structure
-          mkdir -p "${PACKAGE}"/{conf,docs}
-          
-          # Copy binary
-          cp "${BINARY}" "${PACKAGE}/"
-          
-          # Copy config
-          cp ../conf/config.yaml.example "${PACKAGE}/conf/" || true
-          if [ -f "../conf/config.${{ matrix.os }}.yaml" ]; then
-            cp "../conf/config.${{ matrix.os }}.yaml" "${PACKAGE}/conf/config.yaml"
-          else
-            cp ../conf/config.yaml.example "${PACKAGE}/conf/config.yaml"
-          fi
-          
-          # Copy docs
-          cp ../docs/*.md "${PACKAGE}/docs/" 2>/dev/null || true
-          cp ../README.md "${PACKAGE}/" 2>/dev/null || true
-          
-          # Copy scripts for non-Windows
-          if [ "${{ matrix.os }}" != "windows" ]; then
-            mkdir -p "${PACKAGE}/scripts"
-            cp ../scripts/*.sh "${PACKAGE}/scripts/" 2>/dev/null || true
-            chmod +x "${PACKAGE}/scripts/"*.sh 2>/dev/null || true
-            # Copy management script
-            cp ../xray-panel.sh "${PACKAGE}/" 2>/dev/null || true
-            chmod +x "${PACKAGE}/xray-panel.sh" 2>/dev/null || true
-            chmod +x "${PACKAGE}/${BINARY}"
-          fi
-          
-          # Create archive
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            zip -r "${PACKAGE}.zip" "${PACKAGE}"
-            ARCHIVE="${PACKAGE}.zip"
-          else
-            tar czf "${PACKAGE}.tar.gz" "${PACKAGE}"
-            ARCHIVE="${PACKAGE}.tar.gz"
-          fi
-          
-          # Generate checksum
-          sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
-          
-          echo "Package created:"
-          ls -lh "${ARCHIVE}"*
+          tar czf "${PKG}.tar.gz" "${PKG}"
+          sha256sum "${PKG}.tar.gz" > "${PKG}.tar.gz.sha256"
+          echo "Package: $(du -sh ${PKG}.tar.gz | cut -f1)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.os }}-${{ matrix.arch }}
+          name: build-linux-${{ matrix.arch }}
           path: |
             dist/*.tar.gz
-            dist/*.zip
-            dist/*.sha256
+            dist/*.tar.gz.sha256
           if-no-files-found: error
 
   release:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Download all artifacts
@@ -139,69 +100,60 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Display artifacts
-        run: |
-          echo "Downloaded artifacts:"
-          ls -lhR artifacts/
-
       - name: Prepare release files
         run: |
           mkdir -p release
-          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec mv {} release/ \;
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.sha256" \) -exec mv {} release/ \;
           echo "Release files:"
           ls -lh release/
 
       - name: Generate release notes
         run: |
-          cat > release-notes.md << 'EOF'
-          ## 🚀 Xray Panel ${{ github.event.inputs.version }}
-          
-          ### 📦 Downloads
-          
-          **Linux:**
-          - AMD64: `xray-panel-${{ github.event.inputs.version }}-linux-amd64.tar.gz`
-          - ARM64: `xray-panel-${{ github.event.inputs.version }}-linux-arm64.tar.gz`
-          
-          **Windows:**
-          - AMD64: `xray-panel-${{ github.event.inputs.version }}-windows-amd64.zip`
-          - ARM64: `xray-panel-${{ github.event.inputs.version }}-windows-arm64.zip`
-          
-          **macOS:**
-          - Intel: `xray-panel-${{ github.event.inputs.version }}-darwin-amd64.tar.gz`
-          - Apple Silicon: `xray-panel-${{ github.event.inputs.version }}-darwin-arm64.tar.gz`
-          
-          ### 🔐 Verification
-          
-          Verify downloads using SHA256:
-          ```bash
-          sha256sum -c xray-panel-${{ github.event.inputs.version }}-linux-amd64.tar.gz.sha256
-          ```
-          
-          ### 📝 Installation
-          
-          **Linux/macOS:**
-          ```bash
-          tar xzf xray-panel-${{ github.event.inputs.version }}-linux-amd64.tar.gz
-          cd xray-panel-${{ github.event.inputs.version }}-linux-amd64
-          ./panel-linux-amd64
-          ```
-          
-          **Windows:**
-          Extract the ZIP file and run `panel-windows-amd64.exe`
-          
-          ### 📚 Documentation
-          
-          - [Installation Guide](https://github.com/${{ github.repository }}/blob/master/docs/installation-guide.md)
-          - [Configuration](https://github.com/${{ github.repository }}/blob/master/docs/configuration.md)
-          
-          ### ⚠️ First Run
-          
-          Admin credentials are auto-generated on first run. View them with:
-          ```bash
-          ./panel-linux-amd64 admin
-          ```
-          
-          **Change the password immediately after first login!**
+          VERSION="${{ github.event.inputs.version }}"
+          cat > release-notes.md << EOF
+          ## Xray Panel ${VERSION}
+
+          ### 下载
+
+          | 平台 | 文件 |
+          |------|------|
+          | Linux AMD64 | \`xray-panel-${VERSION}-linux-amd64.tar.gz\` |
+          | Linux ARM64 | \`xray-panel-${VERSION}-linux-arm64.tar.gz\` |
+
+          ### 校验
+
+          \`\`\`bash
+          sha256sum -c xray-panel-${VERSION}-linux-amd64.tar.gz.sha256
+          \`\`\`
+
+          ### 在线安装
+
+          \`\`\`bash
+          bash <(curl -Ls https://raw.githubusercontent.com/${{ github.repository }}/master/scripts/install.sh) install
+          \`\`\`
+
+          ### 本地安装
+
+          \`\`\`bash
+          tar xzf xray-panel-${VERSION}-linux-amd64.tar.gz
+          cd xray-panel-${VERSION}-linux-amd64
+          bash scripts/install.sh install
+          \`\`\`
+
+          ### 首次启动
+
+          服务安装后**未自动启动**，请先检查配置文件再启动：
+
+          \`\`\`bash
+          # 检查配置
+          cat /opt/xray-panel/conf/config.yaml
+
+          # 启动服务
+          systemctl start xray-panel
+
+          # 查看管理员账户
+          cd /opt/xray-panel && ./panel admin
+          \`\`\`
           EOF
 
       - name: Create Release

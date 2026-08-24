@@ -1,63 +1,64 @@
 # Xray Panel 脚本说明
 
-## 脚本列表
+## 脚本职责
 
-| 脚本 | 说明 |
+| 文件 | 用途 |
 |------|------|
-| `install-online.sh` | 在线安装（从 GitHub 下载）|
-| `install-local.sh` | 本地安装（从压缩包）|
-| `update.sh` | 更新面板 |
-| `uninstall.sh` | 卸载面板 |
-| `reset-admin.sh` | 重置管理员密码 |
+| `scripts/install.sh` | **首次安装 & 生命周期管理**：install / update / uninstall / update-geo / status |
+| `xray-panel.sh`（根目录）| **安装后交互式管理菜单**：服务控制、账户管理、Nginx、备份等 |
 
-## 快速开始
+## 快速安装
 
 ### 在线安装
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install-online.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh) install
 ```
 
-### 本地安装
+指定版本 / 仓库：
+
+```bash
+PANEL_VERSION=v1.2.0 bash <(curl -Ls .../install.sh) install
+GITHUB_REPO=myorg/xray-panel bash <(curl -Ls .../install.sh) install
+```
+
+### 本地安装（解压包内运行）
 
 ```bash
 tar xzf xray-panel-v1.0.0-linux-amd64.tar.gz
 cd xray-panel-v1.0.0-linux-amd64
-bash scripts/install-local.sh
+bash scripts/install.sh install
 ```
 
-### 更新
+## install.sh 命令参考
 
-```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/update.sh)
+```
+install.sh install              在线安装（最新版）
+install.sh install <pkg.tar.gz> 本地安装（指定压缩包）
+install.sh update [version]     更新面板（默认 latest）
+install.sh uninstall            卸载面板
+install.sh update-geo           更新 geoip.dat / geosite.dat
+install.sh status               查看面板及 Geo 文件状态
 ```
 
-### 卸载
+### 定期更新 Geo 文件（cron）
+
+使用 [Loyalsoldier/v2ray-rules-dat](https://github.com/Loyalsoldier/v2ray-rules-dat) 增强版规则：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/uninstall.sh)
+# 每周一凌晨 3 点自动更新
+0 3 * * 1 bash /opt/xray-panel/scripts/install.sh update-geo >> /var/log/geo-update.log 2>&1
 ```
 
 ## 环境变量
 
-### install-online.sh
-
-- `PANEL_VERSION` - 安装版本（默认: latest）
-- `GITHUB_REPO` - GitHub 仓库（默认: nxovaeng/xray-panel）
-
-示例：
-```bash
-PANEL_VERSION="v1.0.0" GITHUB_REPO="username/repo" bash install-online.sh
-```
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `GITHUB_REPO` | `nxovaeng/xray-panel` | GitHub 仓库 |
+| `PANEL_VERSION` | `latest` | 安装/更新版本 |
 
 ## 系统要求
 
 - Ubuntu 20.04+ / Debian 10+ / CentOS 8+
-- AMD64 或 ARM64 架构
+- AMD64 或 ARM64
 - Root 权限
-
-## 相关文档
-
-- [快速开始](../QUICK_START.md)
-- [安装指南](../docs/installation-guide.md)
-- [配置说明](../docs/configuration.md)

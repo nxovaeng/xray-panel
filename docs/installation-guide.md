@@ -26,13 +26,13 @@
 
 ```bash
 # 安装最新版本
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install-online.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh) install
 
 # 安装指定版本
-PANEL_VERSION="v1.0.0" bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install-online.sh)
+PANEL_VERSION="v1.0.0" bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh) install
 
 # 从自定义仓库安装
-GITHUB_REPO="username/repo" bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install-online.sh)
+GITHUB_REPO="username/repo" bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh) install
 ```
 
 ### 方式二：本地安装
@@ -60,7 +60,7 @@ GITHUB_REPO="username/repo" bash <(curl -Ls https://raw.githubusercontent.com/nx
    cd xray-panel-v1.0.0-linux-amd64
    
    # 运行安装脚本
-   bash scripts/install-local.sh
+   bash scripts/install.sh install
    ```
 
 ## 安装过程说明
@@ -409,10 +409,10 @@ xray-panel
 
 ```bash
 # 更新到最新版本
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/update.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh) update
 
 # 更新到指定版本
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/update.sh) v1.0.0
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh) update v1.0.0
 ```
 
 更新过程会自动：
@@ -434,7 +434,7 @@ xray-panel
 ### 手动卸载
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/uninstall.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh) uninstall
 ```
 
 卸载过程：

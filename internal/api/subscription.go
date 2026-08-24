@@ -178,12 +178,12 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 	// Nginx 到 Xray 的连接是 none（内部通信）
 	params.Set("security", "tls")
 	params.Set("sni", sniDomain) // SNI 使用反代子域名
-	params.Set("alpn", "h2")
-	params.Set("fp", "randomized")
+	params.Set("fp", "chrome")
 
 	// Transport settings
 	switch inbound.Transport {
 	case models.TransportXHTTP:
+		params.Set("alpn", "h2")
 		params.Set("path", inbound.Path)
 		if inbound.Host != "" {
 			params.Set("host", inbound.Host)
@@ -192,10 +192,12 @@ func generateVLESSLink(user models.User, inbound models.Inbound) string {
 		params.Set("mode", "auto")
 
 	case models.TransportGRPC:
+		params.Set("alpn", "h2")
 		params.Set("serviceName", inbound.ServiceName)
 		params.Set("mode", "multi")
 
 	case models.TransportWS:
+		params.Set("alpn", "http/1.1")
 		params.Set("path", inbound.Path)
 		if inbound.Host != "" {
 			params.Set("host", inbound.Host)
@@ -247,20 +249,22 @@ func generateTrojanLink(user models.User, inbound models.Inbound) string {
 	params.Set("type", string(inbound.Transport))
 	params.Set("security", "tls")
 	params.Set("sni", sniDomain)
-	params.Set("alpn", "h2")
-	params.Set("fp", "randomized")
+	params.Set("fp", "chrome")
 
 	switch inbound.Transport {
 	case models.TransportXHTTP:
+		params.Set("alpn", "h2")
 		params.Set("path", inbound.Path)
 		if inbound.Host != "" {
 			params.Set("host", inbound.Host)
 		}
 		params.Set("mode", "auto")
 	case models.TransportGRPC:
+		params.Set("alpn", "h2")
 		params.Set("serviceName", inbound.ServiceName)
 		params.Set("mode", "multi")
 	case models.TransportWS:
+		params.Set("alpn", "http/1.1")
 		params.Set("path", inbound.Path)
 		if inbound.Host != "" {
 			params.Set("host", inbound.Host)
@@ -342,9 +346,10 @@ func generateClashConfig(user models.User, inbounds []models.Inbound) string {
 		sb.WriteString(fmt.Sprintf("    network: %s\n", inbound.Transport))
 		sb.WriteString("    tls: true\n")
 		sb.WriteString(fmt.Sprintf("    servername: %s\n", sniDomain)) // SNI 使用反代子域名
-		sb.WriteString("    client-fingerprint: randomized\n")
+		sb.WriteString("    client-fingerprint: chrome\n")
 		sb.WriteString("    alpn:\n")
 		sb.WriteString("      - h2\n")
+		sb.WriteString("      - http/1.1\n")
 
 		// Transport options
 		switch inbound.Transport {

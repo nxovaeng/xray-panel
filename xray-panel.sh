@@ -1,690 +1,459 @@
 #!/bin/bash
+# Xray Panel 交互式管理脚本
 
-# Xray Panel 便捷管理脚本
-# Version: 1.0.0
+set -euo pipefail
 
-set -e
+# ── 颜色 ──────────────────────────────────────────────────────────────────────
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; PLAIN='\033[0m'
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-PLAIN='\033[0m'
-
-# 配置路径
+# ── 常量 ──────────────────────────────────────────────────────────────────────
+GITHUB_REPO="nxovaeng/xray-panel"
 INSTALL_DIR="/opt/xray-panel"
 CONFIG_DIR="${INSTALL_DIR}/conf"
 DATA_DIR="${INSTALL_DIR}/data"
 LOG_DIR="${INSTALL_DIR}/logs"
 BINARY_PATH="${INSTALL_DIR}/panel"
-SYSTEMD_SERVICE="/etc/systemd/system/xray-panel.service"
+SCRIPTS_DIR="${INSTALL_DIR}/scripts"
+XRAY_ASSETS="/usr/local/share/xray"
 
-# 检测 GitHub 仓库
-detect_github_repo() {
-    local repo=""
-    
-    # 1. 检查环境变量
-    if [[ -n "$GITHUB_REPO" ]]; then
-        repo="$GITHUB_REPO"
-    # 2. 尝试从 git remote 检测
-    elif command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
-        repo=$(git config --get remote.origin.url 2>/dev/null | sed -E 's#.*github\.com[:/]([^/]+/[^/]+)(\.git)?$#\1#')
-    fi
-    
-    # 3. 回退到默认值
-    if [[ -z "$repo" ]]; then
-        repo="nxovaeng/xray-panel"
-    fi
-    
-    echo "$repo"
-}
+# ── 工具函数 ──────────────────────────────────────────────────────────────────
+info()    { echo -e "${BLUE}[INFO]${PLAIN}  $*"; }
+ok()      { echo -e "${GREEN}[OK]${PLAIN}    $*"; }
+warn()    { echo -e "${YELLOW}[WARN]${PLAIN}  $*"; }
+err()     { echo -e "${RED}[ERROR]${PLAIN} $*"; }
+pause()   { echo ""; read -rp "按回车键继续..."; }
 
-GITHUB_REPO=$(detect_github_repo)
-
-# 检查 root 权限
-check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        echo -e "${RED}错误: 此脚本必须以 root 权限运行${PLAIN}"
+need_root()      { [[ $EUID -eq 0 ]] || { err "请以 root 权限运行"; exit 1; }; }
+need_installed() {
+    [[ -f "$BINARY_PATH" ]] || {
+        err "Xray Panel 未安装"
+        echo -e "  运行安装命令: ${CYAN}bash <(curl -Ls https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/install.sh) install${PLAIN}"
         exit 1
+    }
+}
+
+# 调用 scripts/install.sh（首次安装 & 生命周期管理脚本）
+call_scripts() {
+    local script="$SCRIPTS_DIR/install.sh"
+    if [[ -f "$script" ]]; then
+        bash "$script" "$@"
+    else
+        # 回退：从网络下载执行
+        bash <(curl -fsSL "https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/install.sh") "$@"
     fi
 }
 
-# 检查是否已安装
-check_installed() {
-    if [[ ! -f "$BINARY_PATH" ]]; then
-        echo -e "${RED}错误: Xray Panel 未安装${PLAIN}"
-        echo -e "${YELLOW}请先运行安装脚本: bash <(curl -Ls https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/install-online.sh)${PLAIN}"
-        exit 1
-    fi
-}
-
-# 显示 Logo
-show_logo() {
+# ── 界面 ──────────────────────────────────────────────────────────────────────
+show_header() {
     clear
     echo -e "${CYAN}"
-    cat << "EOF"
- __   __                   ____                  _ 
+    cat << 'EOF'
+ __   __                   ____                  _
  \ \ / /_ __ __ _ _   _   |  _ \ __ _ _ __   ___| |
   \ V / '__/ _` | | | |  | |_) / _` | '_ \ / _ \ |
    | || | | (_| | |_| |  |  __/ (_| | | | |  __/ |
    |_||_|  \__,_|\__, |  |_|   \__,_|_| |_|\___|_|
-                 |___/                             
+                 |___/
 EOF
     echo -e "${PLAIN}"
-    echo -e "${CYAN}Xray Panel 管理脚本${PLAIN}"
-    echo -e "${CYAN}========================================${PLAIN}"
+
+    # 状态行
+    local panel_status xray_status
+    if systemctl is-active --quiet xray-panel 2>/dev/null; then
+        panel_status="${GREEN}运行中${PLAIN}"
+    else
+        panel_status="${RED}已停止${PLAIN}"
+    fi
+    if systemctl is-active --quiet xray 2>/dev/null; then
+        xray_status="${GREEN}运行中${PLAIN}"
+    else
+        xray_status="${RED}已停止${PLAIN}"
+    fi
+
+    echo -e "  面板: $panel_status    Xray: $xray_status"
+    echo -e "${CYAN}────────────────────────────────────────${PLAIN}"
     echo ""
 }
 
-# 显示菜单
 show_menu() {
-    echo -e "${GREEN}0.${PLAIN} 退出脚本"
-    echo " ————————————————"
-    echo -e "${GREEN}1.${PLAIN} 安装 Xray Panel"
-    echo -e "${GREEN}2.${PLAIN} 更新 Xray Panel"
-    echo -e "${GREEN}3.${PLAIN} 卸载 Xray Panel"
-    echo " ————————————————"
-    echo -e "${GREEN}4.${PLAIN} 启动 Xray Panel"
-    echo -e "${GREEN}5.${PLAIN} 停止 Xray Panel"
-    echo -e "${GREEN}6.${PLAIN} 重启 Xray Panel"
-    echo -e "${GREEN}7.${PLAIN} 查看 Xray Panel 状态"
-    echo -e "${GREEN}8.${PLAIN} 查看 Xray Panel 日志"
-    echo " ————————————————"
-    echo -e "${GREEN}9.${PLAIN} 设置 Xray Panel 开机自启"
-    echo -e "${GREEN}10.${PLAIN} 取消 Xray Panel 开机自启"
-    echo " ————————————————"
-    echo -e "${GREEN}11.${PLAIN} 重置管理员账户"
-    echo -e "${GREEN}12.${PLAIN} 查看管理员信息"
-    echo -e "${GREEN}13.${PLAIN} 修改面板端口"
-    echo " ————————————————"
-    echo -e "${GREEN}14.${PLAIN} 启动 Xray"
-    echo -e "${GREEN}15.${PLAIN} 停止 Xray"
-    echo -e "${GREEN}16.${PLAIN} 重启 Xray"
-    echo -e "${GREEN}17.${PLAIN} 查看 Xray 状态"
-    echo -e "${GREEN}18.${PLAIN} 查看 Xray 日志"
-    echo -e "${GREEN}23.${PLAIN} 更新 Xray-core"
-    echo -e "${GREEN}24.${PLAIN} 申请 WARP WireGuard 配置"
-    echo -e "${GREEN}25.${PLAIN} 更新管理脚本"
-    echo " ————————————————"
-    echo -e "${GREEN}19.${PLAIN} 配置 Nginx 反向代理"
-    echo " ————————————————"
-    echo -e "${GREEN}20.${PLAIN} 备份数据"
-    echo -e "${GREEN}21.${PLAIN} 恢复数据"
-    echo -e "${GREEN}22.${PLAIN} 清理日志"
-    echo " ————————————————"
+    echo -e "  ${CYAN}── 面板管理 ──────────────────────────${PLAIN}"
+    echo -e "  ${GREEN}1.${PLAIN}  安装面板           ${GREEN}2.${PLAIN}  更新面板"
+    echo -e "  ${GREEN}3.${PLAIN}  卸载面板           ${GREEN}4.${PLAIN}  更新管理脚本"
     echo ""
-    read -p "请输入选择 [0-25]: " choice
+    echo -e "  ${CYAN}── 服务控制 ──────────────────────────${PLAIN}"
+    echo -e "  ${GREEN}5.${PLAIN}  启动面板           ${GREEN}6.${PLAIN}  停止面板"
+    echo -e "  ${GREEN}7.${PLAIN}  重启面板           ${GREEN}8.${PLAIN}  查看面板状态"
+    echo -e "  ${GREEN}9.${PLAIN}  实时日志           ${GREEN}10.${PLAIN} 开机自启 (切换)"
+    echo ""
+    echo -e "  ${CYAN}── 账户配置 ──────────────────────────${PLAIN}"
+    echo -e "  ${GREEN}11.${PLAIN} 查看管理员信息     ${GREEN}12.${PLAIN} 重置管理员密码"
+    echo -e "  ${GREEN}13.${PLAIN} 修改面板端口"
+    echo ""
+    echo -e "  ${CYAN}── Xray-core ─────────────────────────${PLAIN}"
+    echo -e "  ${GREEN}14.${PLAIN} 启动 Xray          ${GREEN}15.${PLAIN} 停止 Xray"
+    echo -e "  ${GREEN}16.${PLAIN} 重启 Xray          ${GREEN}17.${PLAIN} Xray 状态/日志"
+    echo -e "  ${GREEN}18.${PLAIN} 更新 Xray-core     ${GREEN}19.${PLAIN} 更新 Geo 文件"
+    echo ""
+    echo -e "  ${CYAN}── Nginx / 数据 ──────────────────────${PLAIN}"
+    echo -e "  ${GREEN}20.${PLAIN} 配置 Nginx 反代    ${GREEN}21.${PLAIN} 备份数据"
+    echo -e "  ${GREEN}22.${PLAIN} 恢复数据           ${GREEN}23.${PLAIN} 清理旧日志"
+    echo ""
+    echo -e "  ${CYAN}── 工具 ──────────────────────────────${PLAIN}"
+    echo -e "  ${GREEN}24.${PLAIN} 申请 WARP 配置"
+    echo ""
+    echo -e "  ${GREEN}0.${PLAIN}  退出"
+    echo ""
+    read -rp "  请输入选择 [0-24]: " choice
     echo ""
 }
 
-# 1. 安装
-install_panel() {
-    echo -e "${BLUE}[INFO]${PLAIN} 开始安装 Xray Panel..."
-    
+# ══════════════════════════════════════════════════════════════════════════════
+# 1. 安装面板
+# ══════════════════════════════════════════════════════════════════════════════
+do_install() {
     if [[ -f "$BINARY_PATH" ]]; then
-        echo -e "${YELLOW}[WARNING]${PLAIN} Xray Panel 已安装"
-        read -p "是否重新安装? (y/n): " -r
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            return
-        fi
+        warn "Xray Panel 已安装"
+        read -rp "是否重新安装? (y/N): " ans
+        [[ "$ans" =~ ^[Yy]$ ]] || return
     fi
-    
-    # 下载并执行在线安装脚本
-    bash <(curl -Ls https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/install-online.sh)
+    call_scripts install
 }
 
-# 2. 更新
-update_panel() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 开始更新 Xray Panel..."
-    
-    # 下载并执行在线安装脚本
-    bash <(curl -Ls "https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/update.sh")
-
-    # update.sh 已经处理了管理脚本的更新
-    # 如果当前脚本是通过软链接运行的，重新加载提示
-    echo ""
-    echo -e "${YELLOW}[INFO]${PLAIN} 管理脚本已更新，如需使用新功能请重新运行 xray-panel"
+# ══════════════════════════════════════════════════════════════════════════════
+# 2. 更新面板
+# ══════════════════════════════════════════════════════════════════════════════
+do_update() {
+    need_installed
+    read -rp "更新到版本 (留空=latest): " ver
+    call_scripts update "${ver:-latest}"
 }
 
-# 3. 卸载
-uninstall_panel() {
-    check_installed
-    echo -e "${RED}[WARNING]${PLAIN} 即将卸载 Xray Panel"
-    read -p "确认卸载? (yes/no): " -r
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
-        return
-    fi
-    
-    bash <(curl -Ls "https://raw.githubusercontent.com/$GITHUB_REPO/master/scripts/uninstall.sh")
+# ══════════════════════════════════════════════════════════════════════════════
+# 3. 卸载面板
+# ══════════════════════════════════════════════════════════════════════════════
+do_uninstall() {
+    need_installed
+    call_scripts uninstall
 }
 
-# 4. 启动
-start_panel() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 启动 Xray Panel..."
-    systemctl start xray-panel
-    sleep 2
-    if systemctl is-active --quiet xray-panel; then
-        echo -e "${GREEN}[SUCCESS]${PLAIN} Xray Panel 已启动"
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. 更新管理脚本（本文件自身）
+# ══════════════════════════════════════════════════════════════════════════════
+do_update_self() {
+    info "从 GitHub 下载最新管理脚本..."
+    local url="https://raw.githubusercontent.com/$GITHUB_REPO/master/xray-panel.sh"
+    local tmp
+    tmp=$(mktemp)
+    if curl -fsSL "$url" -o "$tmp" && head -1 "$tmp" | grep -q '^#!'; then
+        cp "$tmp" "$INSTALL_DIR/xray-panel.sh"
+        chmod +x "$INSTALL_DIR/xray-panel.sh"
+        ln -sf "$INSTALL_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
+        ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
+        rm -f "$tmp"
+        ok "管理脚本已更新，请重新运行 xray-panel"
+        exit 0
     else
-        echo -e "${RED}[ERROR]${PLAIN} Xray Panel 启动失败"
-        echo -e "${YELLOW}查看日志: journalctl -u xray-panel -n 50${PLAIN}"
+        rm -f "$tmp"
+        err "下载失败，请检查网络"
     fi
 }
 
-# 5. 停止
-stop_panel() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 停止 Xray Panel..."
-    systemctl stop xray-panel
-    echo -e "${GREEN}[SUCCESS]${PLAIN} Xray Panel 已停止"
-}
+# ══════════════════════════════════════════════════════════════════════════════
+# 5-10. 面板服务控制
+# ══════════════════════════════════════════════════════════════════════════════
+do_start()   { need_installed; systemctl start   xray-panel && ok "面板已启动"   || err "启动失败，查看: journalctl -u xray-panel -n 30"; }
+do_stop()    { need_installed; systemctl stop    xray-panel && ok "面板已停止"; }
+do_restart() { need_installed; systemctl restart xray-panel && ok "面板已重启"   || err "重启失败，查看: journalctl -u xray-panel -n 30"; }
+do_status()  { need_installed; systemctl status  xray-panel --no-pager -l; }
+do_logs()    { need_installed; info "实时日志 (Ctrl+C 退出)"; journalctl -u xray-panel -f; }
 
-# 6. 重启
-restart_panel() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 重启 Xray Panel..."
-    systemctl restart xray-panel
-    sleep 2
-    if systemctl is-active --quiet xray-panel; then
-        echo -e "${GREEN}[SUCCESS]${PLAIN} Xray Panel 已重启"
+do_autostart() {
+    need_installed
+    if systemctl is-enabled --quiet xray-panel 2>/dev/null; then
+        systemctl disable xray-panel
+        ok "已关闭开机自启"
     else
-        echo -e "${RED}[ERROR]${PLAIN} Xray Panel 重启失败"
+        systemctl enable xray-panel
+        ok "已开启开机自启"
     fi
 }
 
-# 7. 查看状态
-status_panel() {
-    check_installed
-    systemctl status xray-panel --no-pager
-}
-
-# 8. 查看日志
-logs_panel() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 实时日志 (Ctrl+C 退出)..."
-    journalctl -u xray-panel -f
-}
-
-# 9. 开机自启
-enable_panel() {
-    check_installed
-    systemctl enable xray-panel
-    echo -e "${GREEN}[SUCCESS]${PLAIN} 已设置开机自启"
-}
-
-# 10. 取消开机自启
-disable_panel() {
-    check_installed
-    systemctl disable xray-panel
-    echo -e "${GREEN}[SUCCESS]${PLAIN} 已取消开机自启"
-}
-
-# 11. 重置管理员
-reset_admin() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 重置管理员账户"
-    echo ""
-    
-    read -p "请输入管理员用户名: " username
-    read -sp "请输入新密码: " password
-    echo ""
-    read -sp "请再次输入密码: " password2
-    echo ""
-    
-    if [[ "$password" != "$password2" ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 两次密码不一致"
-        return
-    fi
-    
-    if [[ ${#password} -lt 8 ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 密码长度至少 8 位"
-        return
-    fi
-    
+# ══════════════════════════════════════════════════════════════════════════════
+# 11. 查看管理员信息
+# ══════════════════════════════════════════════════════════════════════════════
+do_show_admin() {
+    need_installed
     cd "$INSTALL_DIR"
-    ./panel reset-password -username "$username" -password "$password"
+    ./panel admin -config "$CONFIG_DIR/config.yaml"
 }
 
-# 12. 查看管理员信息
-show_admin() {
-    check_installed
+# ══════════════════════════════════════════════════════════════════════════════
+# 12. 重置管理员密码
+# ══════════════════════════════════════════════════════════════════════════════
+do_reset_password() {
+    need_installed
+    echo ""
+    read -rp "管理员用户名: " uname
+    [[ -n "$uname" ]] || { err "用户名不能为空"; return; }
+
+    local pass pass2
+    read -rsp "新密码: " pass; echo ""
+    read -rsp "确认密码: " pass2; echo ""
+
+    [[ "$pass" == "$pass2" ]] || { err "两次密码不一致"; return; }
+    [[ ${#pass} -ge 8 ]]     || { err "密码长度至少 8 位"; return; }
+
     cd "$INSTALL_DIR"
-    ./panel admin
+    ./panel reset-password -config "$CONFIG_DIR/config.yaml" -u "$uname" -p "$pass"
 }
 
+# ══════════════════════════════════════════════════════════════════════════════
 # 13. 修改面板端口
-change_port() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 修改面板端口"
+# ══════════════════════════════════════════════════════════════════════════════
+do_change_port() {
+    need_installed
+    local cfg="$CONFIG_DIR/config.yaml"
+    local cur_port
+    cur_port=$(grep -oP 'listen:\s*"\K[^"]+' "$cfg" | cut -d: -f2)
+    info "当前端口: ${CYAN}$cur_port${PLAIN}"
+    read -rp "新端口 (1024-65535): " new_port
+    [[ "$new_port" =~ ^[0-9]+$ ]] && (( new_port >= 1024 && new_port <= 65535 )) \
+        || { err "无效端口"; return; }
+    sed -i "s/listen: \".*\"/listen: \"127.0.0.1:$new_port\"/" "$cfg"
+    ok "端口已修改为 $new_port，需重启面板生效"
+    read -rp "立即重启? (y/N): " ans
+    [[ "$ans" =~ ^[Yy]$ ]] && do_restart || true
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 14-17. Xray-core 服务控制
+# ══════════════════════════════════════════════════════════════════════════════
+do_xray_start()   { systemctl start   xray && ok "Xray 已启动"; }
+do_xray_stop()    { systemctl stop    xray && ok "Xray 已停止"; }
+do_xray_restart() { systemctl restart xray && ok "Xray 已重启"; }
+do_xray_status()  {
+    systemctl status xray --no-pager -l
     echo ""
-    
-    current_port=$(grep "listen:" "$CONFIG_DIR/config.yaml" | awk '{print $2}' | tr -d '"' | cut -d':' -f2)
-    echo -e "当前端口: ${GREEN}$current_port${PLAIN}"
-    echo ""
-    
-    read -p "请输入新端口 (1024-65535): " new_port
-    
-    if [[ ! $new_port =~ ^[0-9]+$ ]] || [[ $new_port -lt 1024 ]] || [[ $new_port -gt 65535 ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 无效的端口号"
-        return
-    fi
-    
-    sed -i "s/listen: \".*\"/listen: \"0.0.0.0:$new_port\"/" "$CONFIG_DIR/config.yaml"
-    
-    echo -e "${GREEN}[SUCCESS]${PLAIN} 端口已修改为: $new_port"
-    echo -e "${YELLOW}[INFO]${PLAIN} 请重启面板使配置生效"
-    
-    read -p "是否立即重启? (y/n): " -r
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        restart_panel
-    fi
-}
-
-# 14-18. Xray 管理
-start_xray() {
-    systemctl start xray
-    echo -e "${GREEN}[SUCCESS]${PLAIN} Xray 已启动"
-}
-
-stop_xray() {
-    systemctl stop xray
-    echo -e "${GREEN}[SUCCESS]${PLAIN} Xray 已停止"
-}
-
-restart_xray() {
-    systemctl restart xray
-    echo -e "${GREEN}[SUCCESS]${PLAIN} Xray 已重启"
-}
-
-status_xray() {
-    systemctl status xray --no-pager
-}
-
-logs_xray() {
-    echo -e "${BLUE}[INFO]${PLAIN} 实时日志 (Ctrl+C 退出)..."
+    info "实时日志 (Ctrl+C 退出)"
     journalctl -u xray -f
 }
 
-# 23. 更新 Xray-core
-update_xray() {
-    echo -e "${BLUE}[INFO]${PLAIN} 更新 Xray-core..."
+# ══════════════════════════════════════════════════════════════════════════════
+# 18. 更新 Xray-core
+# ══════════════════════════════════════════════════════════════════════════════
+do_update_xray() {
+    local cur=""
+    command -v xray &>/dev/null && cur=$(xray version 2>/dev/null | head -1 | grep -oP 'Xray \K[\d.]+' || echo "")
+    [[ -n "$cur" ]] && info "当前版本: $cur"
 
-    # 获取当前版本
-    if command -v xray &> /dev/null; then
-        current=$(xray version 2>/dev/null | head -1 | grep -oP 'Xray \K[\d.]+' || echo "未知")
-        echo -e "当前版本: ${YELLOW}${current}${PLAIN}"
-    fi
+    local latest
+    latest=$(curl -fsSL "https://api.github.com/repos/XTLS/Xray-core/releases/latest" \
+        | grep -oP '"tag_name":\s*"\K[^"]+' | head -1 || echo "")
+    [[ -n "$latest" ]] || { err "获取最新版本失败"; return; }
+    info "最新版本: $latest"
 
-    # 获取最新版本
-    latest=$(curl -s "https://api.github.com/repos/XTLS/Xray-core/releases/latest" \
-        | grep -oP '"tag_name": "\K[^"]+' || echo "")
+    [[ "${cur}" == "${latest#v}" ]] && { ok "已是最新版本"; return; }
 
-    if [[ -z "$latest" ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 获取最新版本失败，请检查网络"
-        return
-    fi
+    read -rp "确认更新到 $latest? (y/N): " ans
+    [[ "$ans" =~ ^[Yy]$ ]] || return
 
-    echo -e "最新版本: ${GREEN}${latest}${PLAIN}"
-
-    if [[ "$current" == "${latest#v}" ]]; then
-        echo -e "${GREEN}[INFO]${PLAIN} 已是最新版本，无需更新"
-        return
-    fi
-
-    read -p "确认更新到 ${latest}? (y/n): " -r
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        return
-    fi
-
-    echo -e "${BLUE}[INFO]${PLAIN} 使用官方安装脚本更新..."
-    # 官方安装脚本支持 --version 参数指定版本，不传则安装最新
-    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
-
-    if [[ $? -eq 0 ]]; then
-        new_ver=$(xray version 2>/dev/null | head -1 | grep -oP 'Xray \K[\d.]+' || echo "未知")
-        echo -e "${GREEN}[SUCCESS]${PLAIN} Xray-core 已更新到 ${new_ver}"
-        echo -e "${YELLOW}[INFO]${PLAIN} 正在重启 Xray 服务..."
-        systemctl restart xray
-    else
-        echo -e "${RED}[ERROR]${PLAIN} 更新失败"
-    fi
+    bash -c "$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+    systemctl restart xray
+    ok "Xray-core 已更新并重启"
 }
 
-# 24. 申请 WARP WireGuard 配置
-get_warp_config() {
-    echo -e "${BLUE}[INFO]${PLAIN} 申请 Cloudflare WARP WireGuard 配置"
+# ══════════════════════════════════════════════════════════════════════════════
+# 19. 更新 Geo 文件
+# ══════════════════════════════════════════════════════════════════════════════
+do_update_geo() { call_scripts update-geo; }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 20. 配置 Nginx 反向代理
+# ══════════════════════════════════════════════════════════════════════════════
+do_nginx() {
+    need_installed
     echo ""
+    read -rp "面板域名: " domain
+    [[ -n "$domain" ]] || { err "域名不能为空"; return; }
 
-    # 检查 wgcf 是否已安装
-    if ! command -v wgcf &> /dev/null; then
-        echo -e "${YELLOW}[INFO]${PLAIN} 未找到 wgcf，正在下载..."
+    local default_cert="/etc/letsencrypt/live/$domain/fullchain.pem"
+    local default_key="/etc/letsencrypt/live/$domain/privkey.pem"
 
-        ARCH=$(uname -m)
-        case $ARCH in
-            x86_64)  WGCF_ARCH="amd64" ;;
-            aarch64) WGCF_ARCH="arm64" ;;
-            armv7l)  WGCF_ARCH="armv7" ;;
-            *)
-                echo -e "${RED}[ERROR]${PLAIN} 不支持的架构: $ARCH"
-                return
-                ;;
-        esac
+    read -rp "证书路径 (默认: $default_cert): " cert_path
+    read -rp "私钥路径 (默认: $default_key): " key_path
+    cert_path="${cert_path:-$default_cert}"
+    key_path="${key_path:-$default_key}"
 
-        WGCF_VER=$(curl -s "https://api.github.com/repos/ViRb3/wgcf/releases/latest" \
-            | grep -oP '"tag_name": "\K[^"]+' || echo "v2.2.26")
-        WGCF_URL="https://github.com/ViRb3/wgcf/releases/download/${WGCF_VER}/wgcf_${WGCF_VER#v}_linux_${WGCF_ARCH}"
+    [[ -f "$cert_path" ]] || { err "证书文件不存在: $cert_path"; return; }
+    [[ -f "$key_path"  ]] || { err "私钥文件不存在: $key_path";  return; }
 
-        if wget -q "$WGCF_URL" -O /usr/local/bin/wgcf; then
-            chmod +x /usr/local/bin/wgcf
-            echo -e "${GREEN}[SUCCESS]${PLAIN} wgcf 已安装"
-        else
-            echo -e "${RED}[ERROR]${PLAIN} wgcf 下载失败，请手动安装: https://github.com/ViRb3/wgcf/releases"
-            return
-        fi
-    fi
-
-    WARP_DIR="/opt/xray-panel/warp"
-    mkdir -p "$WARP_DIR"
-    cd "$WARP_DIR"
-
-    # 如果已有账户文件，询问是否重新注册
-    if [[ -f "wgcf-account.toml" ]]; then
-        echo -e "${YELLOW}[INFO]${PLAIN} 已存在 WARP 账户配置"
-        read -p "是否重新注册新账户? (y/n，默认 n): " -r
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -f wgcf-account.toml wgcf-profile.conf
-        fi
-    fi
-
-    # 注册账户
-    if [[ ! -f "wgcf-account.toml" ]]; then
-        echo -e "${BLUE}[INFO]${PLAIN} 正在注册 WARP 账户..."
-        if ! wgcf register --accept-tos; then
-            echo -e "${RED}[ERROR]${PLAIN} 注册失败，请检查网络连接"
-            return
-        fi
-        echo -e "${GREEN}[SUCCESS]${PLAIN} 账户注册成功"
-    fi
-
-    # 生成配置
-    echo -e "${BLUE}[INFO]${PLAIN} 正在生成 WireGuard 配置..."
-    if ! wgcf generate; then
-        echo -e "${RED}[ERROR]${PLAIN} 配置生成失败"
-        return
-    fi
-
-    # 解析配置文件
-    CONF="$WARP_DIR/wgcf-profile.conf"
-    if [[ ! -f "$CONF" ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 配置文件未生成"
-        return
-    fi
-
-    PRIVATE_KEY=$(grep "PrivateKey" "$CONF" | awk '{print $3}')
-    ADDRESS=$(grep "Address" "$CONF" | awk '{print $3}')
-    PEER_PUBKEY=$(grep "PublicKey" "$CONF" | awk '{print $3}')
-    ENDPOINT=$(grep "Endpoint" "$CONF" | awk '{print $3}')
-    MTU=$(grep "MTU" "$CONF" | awk '{print $3}')
-
-    # 分离 endpoint 的 host 和 port
-    ENDPOINT_HOST="${ENDPOINT%:*}"
-    ENDPOINT_PORT="${ENDPOINT##*:}"
-
-    # 分离 IPv4 和 IPv6 地址
-    IPV4_ADDR=$(echo "$ADDRESS" | tr ',' '\n' | grep -v ':' | tr -d ' ')
-    IPV6_ADDR=$(echo "$ADDRESS" | tr ',' '\n' | grep ':' | tr -d ' ')
-
-    echo ""
-    echo -e "${GREEN}========================================${PLAIN}"
-    echo -e "${GREEN}  WARP WireGuard 配置信息${PLAIN}"
-    echo -e "${GREEN}========================================${PLAIN}"
-    echo ""
-    echo -e "${CYAN}配置文件路径:${PLAIN} $CONF"
-    echo ""
-    echo -e "${YELLOW}--- 在面板出站配置中填写以下信息 ---${PLAIN}"
-    echo ""
-    echo -e "${CYAN}类型:${PLAIN}       WireGuard"
-    echo -e "${CYAN}服务器:${PLAIN}     ${ENDPOINT_HOST}"
-    echo -e "${CYAN}端口:${PLAIN}       ${ENDPOINT_PORT} (UDP)"
-    echo -e "${CYAN}私钥:${PLAIN}       ${PRIVATE_KEY}"
-    echo -e "${CYAN}对端公钥:${PLAIN}   ${PEER_PUBKEY}"
-    echo -e "${CYAN}本地 IPv4:${PLAIN}  ${IPV4_ADDR}"
-    echo -e "${CYAN}本地 IPv6:${PLAIN}  ${IPV6_ADDR}"
-    echo -e "${CYAN}MTU:${PLAIN}        ${MTU:-1280}"
-    echo ""
-    echo -e "${YELLOW}--- AllowedIPs (路由所有流量) ---${PLAIN}"
-    echo -e "  0.0.0.0/0, ::/0"
-    echo ""
-    echo -e "${YELLOW}提示:${PLAIN}"
-    echo -e "  · 此配置用于将出站流量通过 WARP 隧道发出，出口 IP 为 Cloudflare IP"
-    echo -e "  · 验证是否生效: curl -s https://www.cloudflare.com/cdn-cgi/trace | grep warp"
-    echo -e "  · 原始配置文件: ${CONF}"
-    echo ""
-    echo -e "${GREEN}========================================${PLAIN}"
-
-    # 保存摘要到文件
-    cat > "$WARP_DIR/warp-summary.txt" <<EOF
-WARP WireGuard 配置摘要
-生成时间: $(date '+%Y-%m-%d %H:%M:%S')
-
-服务器:   ${ENDPOINT_HOST}
-端口:     ${ENDPOINT_PORT}
-私钥:     ${PRIVATE_KEY}
-对端公钥: ${PEER_PUBKEY}
-本地IP:   ${IPV4_ADDR}, ${IPV6_ADDR}
-MTU:      ${MTU:-1280}
-EOF
-    echo -e "${CYAN}摘要已保存到:${PLAIN} $WARP_DIR/warp-summary.txt"
-}
-
-# 19. 配置 Nginx 反向代理
-configure_nginx() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 配置 Nginx 反向代理 (HTTPS)"
-    echo ""
-    
-    read -p "请输入域名: " domain
-    
-    if [[ -z "$domain" ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 域名不能为空"
-        return
-    fi
-    
-    echo -e "${YELLOW}[INFO]${PLAIN} 请确认您已申请了 SSL 证书"
-    
-     # 默认路径猜测
-    default_cert="/etc/letsencrypt/live/$domain/fullchain.pem"
-    default_key="/etc/letsencrypt/live/$domain/privkey.pem"
-    
-    read -p "请输入证书路径 (默认: $default_cert): " cert_path
-    read -p "请输入私钥路径 (默认: $default_key): " key_path
-    
-    cert_path=${cert_path:-$default_cert}
-    key_path=${key_path:-$default_key}
-    
-    # 检查证书文件
-    if [[ ! -f "$cert_path" ]] || [[ ! -f "$key_path" ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 证书文件不存在"
-        echo -e "${YELLOW}[INFO]${PLAIN} 请先申请 SSL 证书（选项 20 或 21）"
-        return
-    fi
-    
     cd "$INSTALL_DIR"
-    ./panel nginx panel -domain="$domain" -cert="$cert_path" -key="$key_path"
-    
-    if [[ $? -eq 0 ]]; then
-         ./panel nginx reload
-         echo -e "${GREEN}[SUCCESS]${PLAIN} Nginx 配置完成"
-         echo -e "${YELLOW}[INFO]${PLAIN} 访问地址: https://$domain"
-    else
-         echo -e "${RED}[ERROR]${PLAIN} Nginx 配置失败"
-    fi
+    ./panel nginx panel -config "$CONFIG_DIR/config.yaml" -d "$domain" -cert "$cert_path" -key "$key_path"
+    ./panel nginx reload -config "$CONFIG_DIR/config.yaml"
+    ok "Nginx 配置完成，访问: https://$domain"
 }
 
-# 20. 备份数据
-backup_data() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 备份数据..."
-    
-    BACKUP_DIR="/root/xray-panel-backup-$(date +%Y%m%d-%H%M%S)"
-    mkdir -p "$BACKUP_DIR"
-    
-    # 备份数据库
-    if [[ -f "$DATA_DIR/panel.db" ]]; then
-        cp "$DATA_DIR/panel.db" "$BACKUP_DIR/"
-    fi
-    
-    # 备份配置
-    if [[ -f "$CONFIG_DIR/config.yaml" ]]; then
-        cp "$CONFIG_DIR/config.yaml" "$BACKUP_DIR/"
-    fi
-    
-    # 打包
-    tar czf "$BACKUP_DIR.tar.gz" -C "$(dirname $BACKUP_DIR)" "$(basename $BACKUP_DIR)"
-    rm -rf "$BACKUP_DIR"
-    
-    echo -e "${GREEN}[SUCCESS]${PLAIN} 备份完成: $BACKUP_DIR.tar.gz"
+# ══════════════════════════════════════════════════════════════════════════════
+# 21. 备份数据
+# ══════════════════════════════════════════════════════════════════════════════
+do_backup() {
+    need_installed
+    local dst="/root/xray-panel-backup-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$dst"
+    [[ -f "$DATA_DIR/panel.db" ]]      && cp "$DATA_DIR/panel.db" "$dst/"
+    [[ -f "$CONFIG_DIR/config.yaml" ]] && cp "$CONFIG_DIR/config.yaml" "$dst/"
+    tar czf "$dst.tar.gz" -C "$(dirname "$dst")" "$(basename "$dst")"
+    rm -rf "$dst"
+    ok "备份完成: $dst.tar.gz"
 }
 
-# 21. 恢复数据
-restore_data() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 恢复数据"
-    echo ""
-    
-    read -p "请输入备份文件路径: " backup_file
-    
-    if [[ ! -f "$backup_file" ]]; then
-        echo -e "${RED}[ERROR]${PLAIN} 备份文件不存在"
-        return
-    fi
-    
-    echo -e "${YELLOW}[WARNING]${PLAIN} 恢复数据将覆盖当前数据"
-    read -p "确认恢复? (yes/no): " -r
-    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
-        return
-    fi
-    
-    # 停止服务
-    systemctl stop xray-panel
-    
-    # 解压
-    TEMP_DIR="/tmp/xray-panel-restore-$$"
-    mkdir -p "$TEMP_DIR"
-    tar xzf "$backup_file" -C "$TEMP_DIR"
-    
-    # 恢复文件
-    BACKUP_CONTENT=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)
-    
-    if [[ -f "$BACKUP_CONTENT/panel.db" ]]; then
-        cp "$BACKUP_CONTENT/panel.db" "$DATA_DIR/"
-    fi
-    
-    if [[ -f "$BACKUP_CONTENT/config.yaml" ]]; then
-        cp "$BACKUP_CONTENT/config.yaml" "$CONFIG_DIR/"
-    fi
-    
-    rm -rf "$TEMP_DIR"
-    
-    # 启动服务
+# ══════════════════════════════════════════════════════════════════════════════
+# 22. 恢复数据
+# ══════════════════════════════════════════════════════════════════════════════
+do_restore() {
+    need_installed
+    read -rp "备份文件路径: " bak
+    [[ -f "$bak" ]] || { err "文件不存在: $bak"; return; }
+
+    warn "恢复将覆盖当前数据库和配置"
+    read -rp "确认继续? (yes/no): " ans
+    [[ "$ans" =~ ^[Yy][Ee][Ss]$ ]] || return
+
+    systemctl stop xray-panel 2>/dev/null || true
+    local tmp
+    tmp=$(mktemp -d)
+    trap "rm -rf $tmp" RETURN
+    tar xzf "$bak" -C "$tmp"
+    local src
+    src=$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -1)
+    [[ -f "$src/panel.db" ]]    && cp "$src/panel.db" "$DATA_DIR/"
+    [[ -f "$src/config.yaml" ]] && cp "$src/config.yaml" "$CONFIG_DIR/"
     systemctl start xray-panel
-    
-    echo -e "${GREEN}[SUCCESS]${PLAIN} 数据恢复完成"
+    ok "恢复完成"
 }
 
-# 22. 清理日志
-clean_logs() {
-    check_installed
-    echo -e "${BLUE}[INFO]${PLAIN} 清理日志..."
-    
-    # 清理面板日志
-    if [[ -d "$LOG_DIR" ]]; then
-        find "$LOG_DIR" -name "*.log" -mtime +7 -delete
-        find "$LOG_DIR" -name "*.gz" -delete
-    fi
-    
-    # 清理系统日志
+# ══════════════════════════════════════════════════════════════════════════════
+# 23. 清理旧日志
+# ══════════════════════════════════════════════════════════════════════════════
+do_clean_logs() {
+    need_installed
+    [[ -d "$LOG_DIR" ]] && find "$LOG_DIR" -name "*.log.*" -mtime +7 -delete
     journalctl --vacuum-time=7d
-    
-    echo -e "${GREEN}[SUCCESS]${PLAIN} 日志清理完成"
+    ok "7 天前的旧日志已清理"
 }
 
-# 25. 仅更新管理脚本
-update_management_script() {
-    echo -e "${BLUE}[INFO]${PLAIN} 从 GitHub 拉取最新管理脚本..."
-
-    local script_url="https://raw.githubusercontent.com/$GITHUB_REPO/master/xray-panel.sh"
-    local tmp_script=$(mktemp)
-
-    if curl -fsSL "$script_url" -o "$tmp_script"; then
-        if head -1 "$tmp_script" | grep -q '^#!'; then
-            cp "$tmp_script" "$INSTALL_DIR/xray-panel.sh"
-            chmod +x "$INSTALL_DIR/xray-panel.sh"
-            ln -sf "$INSTALL_DIR/xray-panel.sh" /usr/local/bin/xray-panel.sh
-            chmod +x /usr/local/bin/xray-panel.sh
-            ln -sf /usr/local/bin/xray-panel.sh /usr/bin/xray-panel
-            rm -f "$tmp_script"
-            echo -e "${GREEN}[SUCCESS]${PLAIN} 管理脚本已更新"
-            echo -e "${YELLOW}[INFO]${PLAIN} 请重新运行 xray-panel 以使用新版本"
-            exit 0  # 退出当前进程，让用户重新运行新脚本
-        else
-            echo -e "${RED}[ERROR]${PLAIN} 下载的脚本格式异常"
-        fi
-    else
-        echo -e "${RED}[ERROR]${PLAIN} 下载失败，请检查网络连接"
-    fi
-    rm -f "$tmp_script"
-}
-main() {
-    check_root
-    
-    while true; do
-        show_logo
-        show_menu
-        
-        case $choice in
-            0)
-                echo -e "${GREEN}退出脚本${PLAIN}"
-                exit 0
-                ;;
-            1) install_panel ;;
-            2) update_panel ;;
-            3) uninstall_panel ;;
-            4) start_panel ;;
-            5) stop_panel ;;
-            6) restart_panel ;;
-            7) status_panel ;;
-            8) logs_panel ;;
-            9) enable_panel ;;
-            10) disable_panel ;;
-            11) reset_admin ;;
-            12) show_admin ;;
-            13) change_port ;;
-            14) start_xray ;;
-            15) stop_xray ;;
-            16) restart_xray ;;
-            17) status_xray ;;
-            18) logs_xray ;;
-            19) configure_nginx ;;
-            20) backup_data ;;
-            21) restore_data ;;
-            22) clean_logs ;;
-            23) update_xray ;;
-            24) get_warp_config ;;
-            25) update_management_script ;;
-            *)
-                echo -e "${RED}无效的选择${PLAIN}"
-                ;;
+# ══════════════════════════════════════════════════════════════════════════════
+# 24. 申请 WARP WireGuard 配置
+# ══════════════════════════════════════════════════════════════════════════════
+do_warp() {
+    # 安装 wgcf
+    if ! command -v wgcf &>/dev/null; then
+        info "下载 wgcf..."
+        local arch
+        case $(uname -m) in
+            x86_64)  arch="amd64" ;;
+            aarch64) arch="arm64" ;;
+            armv7l)  arch="armv7" ;;
+            *) err "不支持的架构: $(uname -m)"; return ;;
         esac
-        
-        echo ""
-        read -p "按回车键继续..." 
+        local ver
+        ver=$(curl -fsSL "https://api.github.com/repos/ViRb3/wgcf/releases/latest" \
+            | grep -oP '"tag_name":\s*"\K[^"]+' | head -1 || echo "v2.2.26")
+        wget -q "https://github.com/ViRb3/wgcf/releases/download/${ver}/wgcf_${ver#v}_linux_${arch}" \
+            -O /usr/local/bin/wgcf && chmod +x /usr/local/bin/wgcf \
+            || { err "wgcf 下载失败"; return; }
+        ok "wgcf 已安装 ($ver)"
+    fi
+
+    local wdir="$INSTALL_DIR/warp"
+    mkdir -p "$wdir"
+    cd "$wdir"
+
+    if [[ -f "wgcf-account.toml" ]]; then
+        warn "已存在 WARP 账户"
+        read -rp "重新注册新账户? (y/N): " ans
+        [[ "$ans" =~ ^[Yy]$ ]] && rm -f wgcf-account.toml wgcf-profile.conf
+    fi
+
+    if [[ ! -f "wgcf-account.toml" ]]; then
+        info "注册 WARP 账户..."
+        wgcf register --accept-tos || { err "注册失败，请检查网络"; return; }
+    fi
+
+    info "生成 WireGuard 配置..."
+    wgcf generate || { err "配置生成失败"; return; }
+
+    local conf="$wdir/wgcf-profile.conf"
+    [[ -f "$conf" ]] || { err "配置文件未生成"; return; }
+
+    local priv_key ep peer_pub addr ipv4 ipv6 mtu
+    priv_key=$(awk '/PrivateKey/ {print $3}' "$conf")
+    ep=$(awk '/Endpoint/ {print $3}' "$conf")
+    peer_pub=$(awk '/PublicKey/ {print $3}' "$conf")
+    addr=$(awk '/Address/ {print $3}' "$conf")
+    mtu=$(awk '/MTU/ {print $3}' "$conf")
+    ipv4=$(echo "$addr" | tr ',' '\n' | grep -v ':' | tr -d ' ')
+    ipv6=$(echo "$addr" | tr ',' '\n' | grep  ':' | tr -d ' ')
+
+    echo ""
+    echo -e "${GREEN}────────────────────────────────────────${PLAIN}"
+    echo -e "${GREEN}  WARP WireGuard 配置${PLAIN}"
+    echo -e "${GREEN}────────────────────────────────────────${PLAIN}"
+    echo -e "  服务器:     ${CYAN}${ep%:*}${PLAIN}"
+    echo -e "  端口:       ${CYAN}${ep##*:} (UDP)${PLAIN}"
+    echo -e "  私钥:       ${CYAN}$priv_key${PLAIN}"
+    echo -e "  对端公钥:   ${CYAN}$peer_pub${PLAIN}"
+    echo -e "  本地 IPv4:  ${CYAN}$ipv4${PLAIN}"
+    echo -e "  本地 IPv6:  ${CYAN}$ipv6${PLAIN}"
+    echo -e "  MTU:        ${CYAN}${mtu:-1280}${PLAIN}"
+    echo -e "  AllowedIPs: ${CYAN}0.0.0.0/0, ::/0${PLAIN}"
+    echo -e "${GREEN}────────────────────────────────────────${PLAIN}"
+    echo -e "  配置文件:   $conf"
+    echo ""
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 主循环
+# ══════════════════════════════════════════════════════════════════════════════
+main() {
+    need_root
+
+    while true; do
+        show_header
+        show_menu
+
+        case "${choice:-}" in
+            0)  echo -e "${GREEN}再见${PLAIN}"; exit 0 ;;
+            1)  do_install ;;
+            2)  do_update ;;
+            3)  do_uninstall ;;
+            4)  do_update_self ;;
+            5)  do_start ;;
+            6)  do_stop ;;
+            7)  do_restart ;;
+            8)  do_status ;;
+            9)  do_logs ;;
+            10) do_autostart ;;
+            11) do_show_admin ;;
+            12) do_reset_password ;;
+            13) do_change_port ;;
+            14) do_xray_start ;;
+            15) do_xray_stop ;;
+            16) do_xray_restart ;;
+            17) do_xray_status ;;
+            18) do_update_xray ;;
+            19) do_update_geo ;;
+            20) do_nginx ;;
+            21) do_backup ;;
+            22) do_restore ;;
+            23) do_clean_logs ;;
+            24) do_warp ;;
+            *)  err "无效选择: ${choice:-}，请输入 0-24" ;;
+        esac
+
+        pause
     done
 }
 
-# 运行主程序
 main

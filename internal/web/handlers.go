@@ -125,13 +125,36 @@ func (h *Handler) DashboardStats(c *gin.Context) {
 		sysInfo = &system.SystemInfo{}
 	}
 
+	// Calculate monthly network traffic by subtracting the baseline snapshot
+	// taken at the start of the current calendar month.
+	netSent := sysInfo.NetBytesSent
+	netRecv := sysInfo.NetBytesRecv
+	currentMonth := time.Now().Format("2006-01")
+
+	var baselineMonthSetting models.Setting
+	if h.db.First(&baselineMonthSetting, "key = ?", "monthly_net_baseline_month").Error == nil &&
+		baselineMonthSetting.Value == currentMonth {
+
+		var sentSetting, recvSetting models.Setting
+		if h.db.First(&sentSetting, "key = ?", "monthly_net_baseline_sent").Error == nil {
+			if v, parseErr := strconv.ParseUint(sentSetting.Value, 10, 64); parseErr == nil && netSent >= v {
+				netSent -= v
+			}
+		}
+		if h.db.First(&recvSetting, "key = ?", "monthly_net_baseline_recv").Error == nil {
+			if v, parseErr := strconv.ParseUint(recvSetting.Value, 10, 64); parseErr == nil && netRecv >= v {
+				netRecv -= v
+			}
+		}
+	}
+
 	stats := struct {
 		// User stats
 		TotalUsers    int64 `json:"total_users"`
 		ActiveUsers   int64 `json:"active_users"`
 		TotalInbounds int64 `json:"total_inbounds"`
 
-		// Network traffic (system-wide)
+		// Network traffic (monthly)
 		NetUpload   string `json:"net_upload"`
 		NetDownload string `json:"net_download"`
 		NetTotal    string `json:"net_total"`
@@ -150,9 +173,9 @@ func (h *Handler) DashboardStats(c *gin.Context) {
 		ActiveUsers:   activeUsers,
 		TotalInbounds: totalInbounds,
 
-		NetUpload:   system.FormatBytes(sysInfo.NetBytesSent),
-		NetDownload: system.FormatBytes(sysInfo.NetBytesRecv),
-		NetTotal:    system.FormatBytes(sysInfo.NetBytesSent + sysInfo.NetBytesRecv),
+		NetUpload:   system.FormatBytes(netSent),
+		NetDownload: system.FormatBytes(netRecv),
+		NetTotal:    system.FormatBytes(netSent + netRecv),
 
 		CPUUsage:    fmt.Sprintf("%.1f%%", sysInfo.CPUUsage),
 		CPUCores:    sysInfo.CPUCores,

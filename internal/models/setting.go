@@ -35,6 +35,11 @@ func DefaultSettings() []Setting {
 		{Key: "default_traffic_limit", Value: "0", Type: "int", Remark: "Default traffic limit (0=unlimited)"},
 		{Key: "default_expire_days", Value: "30", Type: "int", Remark: "Default expiry days for new users"},
 		{Key: "direct_domain_strategy", Value: "UseIPv4", Type: "string", Remark: "Domain strategy for direct outbound"},
+		// Monthly traffic baseline: snapshot of OS network counters at the start of each calendar month.
+		// Values are stored as decimal byte counts. Empty string means "not yet recorded".
+		{Key: "monthly_net_baseline_sent", Value: "", Type: "int", Remark: "OS net bytes sent at start of current month"},
+		{Key: "monthly_net_baseline_recv", Value: "", Type: "int", Remark: "OS net bytes received at start of current month"},
+		{Key: "monthly_net_baseline_month", Value: "", Type: "string", Remark: "Month of the current baseline (YYYY-MM)"},
 	}
 }
 

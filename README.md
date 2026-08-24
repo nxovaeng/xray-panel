@@ -18,7 +18,7 @@
 适用于 Linux 服务器，自动安装所有依赖：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install-online.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh) install
 ```
 
 详细说明请查看 [快速开始](QUICK_START.md) 和 [安装指南](docs/installation-guide.md)。
