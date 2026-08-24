@@ -221,9 +221,39 @@ backup() {
     ok "备份已创建: $dst"
 }
 
-# ── 子命令: install ───────────────────────────────────────────────────────────
+# ── 安装交互管理工具 ──────────────────────────────────────────────────────────
+install_management_tool() {
+    local tool_dst="$INSTALL_DIR/xray-panel.sh"
+    local link_dst="/usr/bin/xray-panel"
+
+    # 优先从已解压的包目录复制（本地安装场景）
+    # EXTRACTED_DIR 由 cmd_install 本地安装分支设置
+    if [[ -n "${EXTRACTED_DIR:-}" && -f "$EXTRACTED_DIR/xray-panel.sh" ]]; then
+        cp "$EXTRACTED_DIR/xray-panel.sh" "$tool_dst"
+        ok "管理工具已从安装包复制"
+    else
+        # 在线安装：从 GitHub 下载
+        info "下载交互管理工具..."
+        local url="https://raw.githubusercontent.com/$GITHUB_REPO/master/xray-panel.sh"
+        if curl -fsSL "$url" -o "$tool_dst"; then
+            ok "管理工具已下载"
+        else
+            warn "管理工具下载失败，可稍后手动安装（不影响面板运行）"
+            return
+        fi
+    fi
+
+    chmod +x "$tool_dst"
+
+    # 软链接到 /usr/bin/xray-panel，使其全局可用
+    ln -sf "$tool_dst" "$link_dst"
+    ok "管理工具已安装: 输入 ${CYAN}xray-panel${PLAIN} 即可打开管理菜单"
+}
+
+
 cmd_install() {
     local local_pkg="${1:-}"   # optional: path to local .tar.gz
+    EXTRACTED_DIR=""           # 解压目录，供 install_management_tool 使用
 
     need_root; detect_arch; detect_os; install_deps
 
@@ -242,6 +272,8 @@ cmd_install() {
         [[ -n "$bin" ]] || die "压缩包内未找到 panel 二进制"
         chmod +x "$bin"
         cp "$bin" "$BINARY_PATH"
+        # 记录解压根目录，供管理工具安装时从包内提取 xray-panel.sh
+        EXTRACTED_DIR=$(find "$tmp" -name "xray-panel.sh" -type f | head -1 | xargs -r dirname)
         ok "面板二进制已安装（本地包）"
     else
         # ── 在线安装 ──
@@ -252,19 +284,21 @@ cmd_install() {
     install_xray_core
     generate_config
     setup_service
-    update_geodata          # 初始安装时顺带更新一次 geo 文件
+    install_management_tool   # 安装 xray-panel 交互管理工具
+    update_geodata            # 初始安装时顺带更新一次 geo 文件
 
     hr
     echo -e "${GREEN}安装完成${PLAIN}"
     hr
     echo -e "  安装目录: ${CYAN}$INSTALL_DIR${PLAIN}"
     echo -e "  配置文件: ${CYAN}$CONFIG_DIR/config.yaml${PLAIN}"
+    echo -e "  管理工具: ${CYAN}xray-panel${PLAIN}"
     echo ""
     echo -e "${YELLOW}下一步:${PLAIN}"
     echo -e "  1. 检查配置:   ${CYAN}$CONFIG_DIR/config.yaml${PLAIN}"
     echo -e "  2. 启动服务:   ${CYAN}systemctl start xray-panel${PLAIN}"
     echo -e "  3. 查看账户:   ${CYAN}cd $INSTALL_DIR && ./panel admin${PLAIN}"
-    echo -e "  4. 查看日志:   ${CYAN}journalctl -u xray-panel -f${PLAIN}"
+    echo -e "  4. 打开管理:   ${CYAN}xray-panel${PLAIN}"
     echo ""
 }
 
@@ -333,6 +367,10 @@ cmd_uninstall() {
         systemctl daemon-reload
     fi
     ok "systemd 服务已移除"
+
+    # 移除全局命令软链接
+    rm -f /usr/bin/xray-panel
+    ok "管理工具软链接已移除"
 
     # 清理 Nginx 面板配置（如有）
     if [[ -f /etc/nginx/conf.d/xray-panel.conf ]]; then
