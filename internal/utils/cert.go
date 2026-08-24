@@ -5,25 +5,59 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
 // ParseCertificateExpiry reads and parses certificate info from a PEM file to get expiration date
 func ParseCertificateExpiry(certPath string) (time.Time, error) {
+	_, expiry, _, _, err := ParseCertificateDetails(certPath)
+	return expiry, err
+}
+
+// ParseCertificateDetails reads and parses detailed certificate info from a PEM file.
+// Returns issuer, expiry, SANs, whether it is a wildcard certificate, and any error.
+func ParseCertificateDetails(certPath string) (issuer string, expiry time.Time, sans []string, isWildcard bool, err error) {
 	data, err := os.ReadFile(certPath)
 	if err != nil {
-		return time.Time{}, err
+		return
 	}
 
 	block, _ := pem.Decode(data)
 	if block == nil {
-		return time.Time{}, fmt.Errorf("failed to decode PEM block")
+		err = fmt.Errorf("failed to decode PEM block from %s", certPath)
+		return
 	}
 
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return time.Time{}, err
+	cert, parseErr := x509.ParseCertificate(block.Bytes)
+	if parseErr != nil {
+		err = parseErr
+		return
 	}
 
-	return cert.NotAfter, nil
+	issuer = cert.Issuer.CommonName
+	expiry = cert.NotAfter
+
+	// Collect all domain names: CN + SANs
+	seen := make(map[string]bool)
+	if cert.Subject.CommonName != "" {
+		sans = append(sans, cert.Subject.CommonName)
+		seen[cert.Subject.CommonName] = true
+	}
+	for _, name := range cert.DNSNames {
+		if !seen[name] {
+			sans = append(sans, name)
+			seen[name] = true
+		}
+	}
+
+	// Wildcard if any SAN starts with "*."
+	for _, name := range sans {
+		if strings.HasPrefix(name, "*.") {
+			isWildcard = true
+			break
+		}
+	}
+
+	return
 }

@@ -843,6 +843,14 @@ func (h *Handler) CreateDomain(c *gin.Context) {
 		return
 	}
 
+	// Auto-detect wildcard: check the domain name string first, then confirm from cert SANs.
+	domain.IsWildcard = strings.HasPrefix(domain.Domain, "*.")
+	if !domain.IsWildcard && domain.CertPath != "" {
+		if _, _, _, isWC, err := utils.ParseCertificateDetails(domain.CertPath); err == nil {
+			domain.IsWildcard = isWC
+		}
+	}
+
 	if err := h.db.Create(&domain).Error; err != nil {
 		c.String(http.StatusInternalServerError, "创建域名失败")
 		return
@@ -870,6 +878,14 @@ func (h *Handler) UpdateDomain(c *gin.Context) {
 	if valid, errMsg := validateCertificatePaths(domain.CertPath, domain.KeyPath); !valid {
 		c.String(http.StatusBadRequest, errMsg)
 		return
+	}
+
+	// Auto-detect wildcard: check the domain name string first, then confirm from cert SANs.
+	domain.IsWildcard = strings.HasPrefix(domain.Domain, "*.")
+	if !domain.IsWildcard && domain.CertPath != "" {
+		if _, _, _, isWC, err := utils.ParseCertificateDetails(domain.CertPath); err == nil {
+			domain.IsWildcard = isWC
+		}
 	}
 
 	if err := h.db.Model(&models.Domain{}).Where("id = ?", id).Updates(&domain).Error; err != nil {

@@ -1,8 +1,6 @@
 package api
 
 import (
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,6 +12,7 @@ import (
 
 	"xray-panel/internal/geodata"
 	"xray-panel/internal/models"
+	"xray-panel/internal/utils"
 )
 
 // handleImportSingleCert imports a single certificate as a domain entry.
@@ -136,71 +135,10 @@ type CertificateInfo struct {
 	Exists       bool      `json:"exists"`
 }
 
-// parseCertificate reads and parses certificate info from a PEM file
-func parseCertificate(certPath string) (issuer string, expiry time.Time, err error) {
-	data, err := os.ReadFile(certPath)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return "", time.Time{}, fmt.Errorf("failed to decode PEM block")
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-
-	return cert.Issuer.CommonName, cert.NotAfter, nil
-}
-
-// parseCertificateDetails reads and parses detailed certificate info including wildcard detection
+// parseCertificateDetails is a local alias kept for call-site compatibility.
+// It delegates to utils.ParseCertificateDetails.
 func parseCertificateDetails(certPath string) (issuer string, expiry time.Time, domains []string, isWildcard bool, err error) {
-	data, err := os.ReadFile(certPath)
-	if err != nil {
-		return "", time.Time{}, nil, false, err
-	}
-
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return "", time.Time{}, nil, false, fmt.Errorf("failed to decode PEM block")
-	}
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return "", time.Time{}, nil, false, err
-	}
-
-	// Collect all domains from certificate
-	domains = make([]string, 0)
-	domainSet := make(map[string]bool) // 用于去重
-
-	// Add Common Name if it's a domain
-	if cert.Subject.CommonName != "" {
-		domains = append(domains, cert.Subject.CommonName)
-		domainSet[cert.Subject.CommonName] = true
-	}
-
-	// Add all Subject Alternative Names
-	for _, name := range cert.DNSNames {
-		if !domainSet[name] {
-			domains = append(domains, name)
-			domainSet[name] = true
-		}
-	}
-
-	// Check if it's a wildcard certificate
-	isWildcard = false
-	for _, domain := range domains {
-		if strings.HasPrefix(domain, "*.") {
-			isWildcard = true
-			break
-		}
-	}
-
-	return cert.Issuer.CommonName, cert.NotAfter, domains, isWildcard, nil
+	return utils.ParseCertificateDetails(certPath)
 }
 
 // getCertificateStatus returns status based on expiry date
