@@ -20,22 +20,10 @@
                 <h1>🔄 应用配置</h1>
             </div>
 
-            <div class="stats-grid">
-                <div class="stat-card" id="xray-status-card">
-                    <div class="stat-icon">
-                        <i data-lucide="activity"></i>
-                    </div>
-                    <div class="stat-info">
-                        <div class="stat-value" id="xray-status-text">检测中...</div>
-                        <div class="stat-label">Xray 服务状态</div>
-                    </div>
-                </div>
-            </div>
-
             <div class="settings-grid"
                 style="display: grid; gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">
 
-                <!-- Panel Settings -->
+                <!-- ===== 面板配置 ===== -->
                 <div class="table-container" style="padding: 2rem;">
                     <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
                         <i data-lucide="settings"></i> 面板配置
@@ -50,6 +38,39 @@
                         <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
                             切换模式后需要保存并应用配置才能完整生效。</p>
                     </div>
+
+                    <div class="form-group">
+                        <label>订阅路径前缀</label>
+                        <input type="text" id="sub-path" class="form-control" style="max-width: 200px;"
+                            value="{{.SubPath}}" placeholder="/d">
+                        <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
+                            订阅 URL 路径前缀，避免使用 <code>/sub</code>、<code>/clash</code> 等易识别的路径。修改后需重启面板生效。
+                        </p>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="savePanelConfig()" id="btn-save-panel">
+                            <i data-lucide="save"></i> 保存面板配置
+                        </button>
+                        <button class="btn btn-warning" onclick="restartPanel()" id="btn-restart-panel">
+                            <i data-lucide="rotate-cw"></i> 重启面板
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ===== Xray 服务控制 ===== -->
+                <div class="table-container" style="padding: 2rem;">
+                    <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i data-lucide="server"></i> Xray 服务控制
+                    </h2>
+
+                    <!-- Xray 运行状态 -->
+                    <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; background: rgba(0,0,0,0.15); border-radius: 0.5rem; margin-bottom: 1.5rem;">
+                        <i data-lucide="activity" style="width: 20px; height: 20px; color: var(--text-secondary);"></i>
+                        <span style="color: var(--text-secondary); font-size: 0.9rem;">Xray 状态：</span>
+                        <span id="xray-status-text" style="font-weight: 600;">检测中...</span>
+                    </div>
+
                     <div class="form-group" id="client-routing-mode-container"
                         style='display: {{if eq .PanelMode "client"}}block{{else}}none{{end}};'>
                         <label>客户端路由模式 <span class="badge badge-info" style="font-size: 0.7em;">仅客户端生效</span></label>
@@ -84,33 +105,15 @@
                         </p>
                     </div>
 
-                    <div class="form-group">
-                        <label>订阅路径前缀</label>
-                        <input type="text" id="sub-path" class="form-control" style="max-width: 200px;"
-                            value="{{.SubPath}}" placeholder="/d">
-                        <p class="help-text" style="font-size: 0.857rem; color: var(--text-muted); margin-top: 0.5rem;">
-                            订阅 URL 路径前缀，避免使用 <code>/sub</code>、<code>/clash</code> 等易识别的路径。修改后需重启面板生效。
-                        </p>
-                    </div>
-
-                    <button class="btn btn-primary" onclick="savePanelMode()" id="btn-save-mode">
-                        <i data-lucide="save"></i> 保存面板配置
-                    </button>
-                </div>
-
-                <!-- Service Control -->
-                <div class="table-container" style="padding: 2rem;">
-                    <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <i data-lucide="server"></i> 服务控制
-                    </h2>
-
                     <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button class="btn btn-primary" onclick="restartXray()" id="btn-restart-xray">
+                        <button class="btn btn-primary" onclick="saveXrayConfig()" id="btn-save-xray">
+                            <i data-lucide="save"></i> 保存 Xray 配置
+                        </button>
+                        <button class="btn btn-outline" onclick="restartXray()" id="btn-restart-xray">
                             <i data-lucide="refresh-cw"></i> 重启 Xray
                         </button>
-
                         <button class="btn btn-warning" onclick="applyConfig()" id="btn-apply-config">
-                            <i data-lucide="save"></i> 应用配置 & 重启服务
+                            <i data-lucide="zap"></i> 应用配置 & 重启服务
                         </button>
                     </div>
 
@@ -142,9 +145,13 @@
     <div id="notification-container"></div>
     <script src="/static/js/app.min.js"></script>
     <script>
-        if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
+        // Helper: refresh lucide icons in action buttons
+        function refreshIcons() {
+            if (window.lucide) lucide.createIcons();
+        }
+        refreshIcons();
 
-        // Check status on load (public API, no auth required)
+        // ===== Xray Status Check =====
         fetch('/api/xray/status')
             .then(res => res.json())
             .then(data => {
@@ -166,26 +173,21 @@
                 el.style.color = "var(--warning)";
             });
 
-        function savePanelMode() {
-            const btn = document.getElementById('btn-save-mode');
+        // ===== 面板配置：保存 =====
+        function savePanelConfig() {
+            const btn = document.getElementById('btn-save-panel');
             const mode = document.getElementById('panel-mode').value;
-            const routingMode = document.getElementById('client-routing-mode').value;
-            const directDomainStrategy = document.getElementById('direct-domain-strategy').value;
             const subPath = document.getElementById('sub-path').value.trim() || '/d';
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 保存中...';
             btn.disabled = true;
-            if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
+            refreshIcons();
 
             fetch('/api/settings', {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     panel_mode: mode,
-                    client_routing_mode: routingMode,
-                    direct_domain_strategy: directDomainStrategy,
                     sub_path: subPath
                 }),
                 credentials: 'same-origin'
@@ -193,10 +195,8 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        showNotification('success', '模式已保存，正在刷新...');
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
+                        showNotification('success', '面板配置已保存，正在刷新...');
+                        setTimeout(() => { window.location.reload(); }, 1000);
                     } else {
                         showNotification('error', '保存失败: ' + data.error);
                     }
@@ -205,16 +205,95 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
+                    refreshIcons();
                 });
         }
 
+        // ===== 面板配置：重启面板 =====
+        function restartPanel() {
+            if (!confirm('确定要重启面板服务吗？页面将暂时不可用。')) return;
+            const btn = document.getElementById('btn-restart-panel');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 重启中...';
+            btn.disabled = true;
+            refreshIcons();
+
+            fetch('/api/panel/restart', {
+                method: 'POST',
+                credentials: 'same-origin'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('success', '面板正在重启，页面将自动刷新...');
+                        // Wait a few seconds then try to reload
+                        setTimeout(() => { tryReload(0); }, 3000);
+                    } else {
+                        showNotification('error', '重启失败: ' + data.error);
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        refreshIcons();
+                    }
+                })
+                .catch(err => {
+                    // Connection drop is expected when the panel restarts
+                    showNotification('success', '面板正在重启，等待恢复...');
+                    setTimeout(() => { tryReload(0); }, 3000);
+                });
+        }
+
+        function tryReload(attempt) {
+            if (attempt > 10) {
+                showNotification('error', '面板未恢复，请手动刷新');
+                return;
+            }
+            fetch('/api/xray/status', { credentials: 'same-origin' })
+                .then(() => { window.location.reload(); })
+                .catch(() => { setTimeout(() => { tryReload(attempt + 1); }, 2000); });
+        }
+
+        // ===== Xray 配置：保存 =====
+        function saveXrayConfig() {
+            const btn = document.getElementById('btn-save-xray');
+            const routingMode = document.getElementById('client-routing-mode').value;
+            const directDomainStrategy = document.getElementById('direct-domain-strategy').value;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 保存中...';
+            btn.disabled = true;
+            refreshIcons();
+
+            fetch('/api/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    client_routing_mode: routingMode,
+                    direct_domain_strategy: directDomainStrategy
+                }),
+                credentials: 'same-origin'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('success', 'Xray 配置已保存。点击「应用配置 & 重启服务」使配置生效。');
+                    } else {
+                        showNotification('error', '保存失败: ' + data.error);
+                    }
+                })
+                .catch(err => showNotification('error', '请求失败'))
+                .finally(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    refreshIcons();
+                });
+        }
+
+        // ===== Xray 服务：重启 =====
         function restartXray() {
             const btn = document.getElementById('btn-restart-xray');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 重启中...';
             btn.disabled = true;
-            if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
+            refreshIcons();
 
             fetch('/api/xray/restart', {
                 method: 'POST',
@@ -224,6 +303,8 @@
                 .then(data => {
                     if (data.success) {
                         showNotification('success', 'Xray 服务已重启');
+                        // Refresh status
+                        setTimeout(() => { refreshXrayStatus(); }, 1000);
                     } else {
                         showNotification('error', '重启失败: ' + data.error);
                     }
@@ -232,16 +313,17 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
+                    refreshIcons();
                 });
         }
 
+        // ===== Xray 服务：应用配置 & 重启 =====
         function applyConfig() {
             const btn = document.getElementById('btn-apply-config');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> 应用中...';
             btn.disabled = true;
-            if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
+            refreshIcons();
 
             fetch('/api/xray/apply', {
                 method: 'POST',
@@ -251,6 +333,7 @@
                 .then(data => {
                     if (data.success) {
                         showNotification('success', '配置已应用，服务已重启');
+                        setTimeout(() => { refreshXrayStatus(); }, 1000);
                     } else {
                         showNotification('error', '应用失败: ' + data.error);
                     }
@@ -259,10 +342,26 @@
                 .finally(() => {
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    if (window.lucide) lucide.createIcons({ nameAttr: "data-lucide", attrs: {}, nodes: [document.getElementById("btn-restart-xray"), document.getElementById("btn-apply-config"), document.getElementById("btn-save-mode")].filter(Boolean) });
+                    refreshIcons();
                 });
         }
 
+        function refreshXrayStatus() {
+            fetch('/api/xray/status')
+                .then(res => res.json())
+                .then(data => {
+                    const el = document.getElementById('xray-status-text');
+                    if (data.success && data.data.active) {
+                        el.innerText = "运行中";
+                        el.style.color = "var(--success)";
+                    } else if (data.success) {
+                        el.innerText = "已停止";
+                        el.style.color = "var(--danger)";
+                    }
+                });
+        }
+
+        // ===== 配置预览 =====
         function previewConfig(type) {
             const pre = document.getElementById('config-preview');
             pre.innerText = "加载中...";

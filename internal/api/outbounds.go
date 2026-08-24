@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -49,10 +51,12 @@ func (s *Server) handleTestOutbound(c *gin.Context) {
 
 // OutboundTestResult represents the result of an outbound connectivity test
 type OutboundTestResult struct {
-	Success  bool   `json:"success"`
-	Message  string `json:"message"`
-	Latency  int64  `json:"latency_ms,omitempty"` // Latency in milliseconds
-	Endpoint string `json:"endpoint,omitempty"`
+	Success    bool   `json:"success"`
+	Message    string `json:"message"`
+	Latency    int64  `json:"latency_ms,omitempty"` // Latency in milliseconds
+	Endpoint   string `json:"endpoint,omitempty"`
+	OutboundIP string `json:"outbound_ip,omitempty"` // The actual egress IP of the proxy
+	Location   string `json:"location,omitempty"`    // Geo location of the egress IP
 }
 
 // testOutboundViaXray runs an ephemeral Xray proxy process and routes HTTP traffic through it.
@@ -114,7 +118,7 @@ func (s *Server) testOutboundViaXray(outbound models.Outbound) OutboundTestResul
 	// Give Xray time to initialize
 	time.Sleep(1000 * time.Millisecond)
 
-	// 5. Test HTTP Proxy
+	// 5. Test HTTP Proxy and fetch egress IP
 	proxyURL, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", proxyPort))
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -124,22 +128,58 @@ func (s *Server) testOutboundViaXray(outbound models.Outbound) OutboundTestResul
 	}
 
 	start := time.Now()
-	resp, err := client.Get("http://cp.cloudflare.com/generate_204")
+	// Call ip-api.com to get the true outbound IP and location via the proxy
+	resp, err := client.Get("http://ip-api.com/json?fields=status,message,country,isp,query")
 	latency := time.Since(start).Milliseconds()
 
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "deadline exceeded") || strings.Contains(errMsg, "timeout") {
-			errMsg = "Connection timed out (Check server/firewall/password)"
+			errMsg = "连接超时，请检查节点配置或服务器网络"
 		} else if strings.Contains(errMsg, "connection refused") {
-			errMsg = "Connection refused by proxy server"
+			errMsg = "本地代理端口连接被拒绝"
 		}
-		return OutboundTestResult{Success: false, Message: "Test failed: " + errMsg, Endpoint: endpoint, Latency: latency}
+		return OutboundTestResult{Success: false, Message: "测试失败: " + errMsg, Endpoint: endpoint, Latency: latency}
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 204 || resp.StatusCode == 200 {
-		return OutboundTestResult{Success: true, Message: "Connected successfully (True Dial Test)", Latency: latency, Endpoint: endpoint}
+	if resp.StatusCode == 200 {
+		var ipInfo struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+			Country string `json:"country"`
+			ISP     string `json:"isp"`
+			Query   string `json:"query"` // The IP address
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err == nil {
+			_ = json.Unmarshal(body, &ipInfo)
+		}
+
+		location := ipInfo.Country
+		if ipInfo.ISP != "" {
+			location += " (" + ipInfo.ISP + ")"
+		}
+		
+		if ipInfo.Status == "fail" {
+			// fallback if rate limited by ip-api
+			return OutboundTestResult{
+				Success:  true,
+				Message:  "连接成功，但无法获取 IP 信息 (Rate limited)",
+				Latency:  latency,
+				Endpoint: endpoint,
+			}
+		}
+
+		return OutboundTestResult{
+			Success:    true,
+			Message:    "连接成功",
+			Latency:    latency,
+			Endpoint:   endpoint,
+			OutboundIP: ipInfo.Query,
+			Location:   location,
+		}
 	}
 
 	return OutboundTestResult{Success: false, Message: fmt.Sprintf("Unexpected HTTP status: %d", resp.StatusCode), Latency: latency, Endpoint: endpoint}

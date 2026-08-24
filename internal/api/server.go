@@ -267,6 +267,9 @@ func (s *Server) setupRoutes() {
 		// Settings
 		api.GET("/settings", s.handleGetSettings)
 		api.PUT("/settings", s.handleUpdateSettings)
+
+		// Panel control
+		api.POST("/panel/restart", s.handlePanelRestart)
 	}
 
 	// Subscription routes (public, rate-limited)

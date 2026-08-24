@@ -20,6 +20,7 @@ type User struct {
 	Enabled      bool      `json:"enabled" form:"enabled" gorm:"default:true;index"`
 	SubPath      string    `json:"sub_path" form:"sub_path" gorm:"uniqueIndex"`
 	Note         string    `json:"note" form:"note"`
+	WGPubKey     string    `json:"wg_pub_key" form:"wg_pub_key"` // WireGuard 客户端公钥（用于 WG 入站多客户端）
 	CreatedAt    time.Time `json:"created_at" form:"created_at" gorm:"index"`
 	UpdatedAt    time.Time `json:"updated_at" form:"updated_at"`
 }

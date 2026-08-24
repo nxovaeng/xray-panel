@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -94,6 +95,19 @@ func (s *Server) handleXrayRestart(c *gin.Context) {
 	}
 
 	jsonOK(c, gin.H{"restarted": true})
+}
+
+// handlePanelRestart restarts the xray-panel service itself.
+// The response is sent before the restart command executes so the client
+// receives a 200 OK.
+func (s *Server) handlePanelRestart(c *gin.Context) {
+	jsonOK(c, gin.H{"restarting": true})
+
+	// Give the HTTP response time to flush, then restart
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		exec.Command("systemctl", "restart", "xray-panel").Start()
+	}()
 }
 
 // handleGetXrayConfig returns the generated Xray config

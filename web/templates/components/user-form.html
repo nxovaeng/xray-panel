@@ -57,6 +57,15 @@
         <small class="form-hint">禁用后用户无法使用订阅</small>
     </div>
 
+    <div class="form-group">
+        <label for="wg_pub_key">WireGuard 公钥 (可选)</label>
+        <input type="text" id="wg_pub_key" name="wg_pub_key"
+            value="{{if .User}}{{.User.WGPubKey}}{{end}}"
+            placeholder="客户端 WireGuard 公钥（用于 WG 入站多客户端）"
+            style="font-family: monospace; font-size: 0.9rem;">
+        <small class="form-hint">若服务端配置了 WireGuard 入站，填入此用户的客户端公钥即可允许其连接。留空则不参与 WireGuard 入站。</small>
+    </div>
+
     <div class="form-actions">
         <button type="button" onclick="closeModal()" class="btn">取消</button>
         <button type="submit" class="btn btn-primary">

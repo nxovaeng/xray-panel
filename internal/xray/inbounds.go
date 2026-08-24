@@ -209,13 +209,13 @@ func (g *Generator) generateTrojanSettings() map[string]interface{} {
 // generateWireGuardInbound generates a WireGuard inbound configuration.
 // WireGuard in Xray acts as a "freedom" tunnel — it receives traffic from
 // another Xray node's WireGuard outbound and routes it locally.
-// The peer is the remote xray-panel node that forwards traffic to this server.
+//
+// Multi-peer support: peers are collected from two sources:
+//  1. Users with a non-empty WGPubKey field (multi-client model).
+//  2. The legacy WGPeerPubKey field on the Inbound itself (backward compat).
 func (g *Generator) generateWireGuardInbound(inbound models.Inbound) (*InboundConfig, error) {
 	if inbound.WGSecretKey == "" {
 		return nil, fmt.Errorf("wireguard inbound %q: secret key is required", inbound.Tag)
-	}
-	if inbound.WGPeerPubKey == "" {
-		return nil, fmt.Errorf("wireguard inbound %q: peer public key is required", inbound.Tag)
 	}
 
 	mtu := inbound.WGMTU
@@ -239,16 +239,33 @@ func (g *Generator) generateWireGuardInbound(inbound models.Inbound) (*InboundCo
 		localIP = localIP + "/32"
 	}
 
+	// Collect peers from active users with WGPubKey
+	peers := make([]map[string]interface{}, 0)
+	seen := make(map[string]bool) // deduplicate by public key
+	for _, user := range g.getActiveUsers() {
+		if user.WGPubKey != "" && !seen[user.WGPubKey] {
+			seen[user.WGPubKey] = true
+			peers = append(peers, map[string]interface{}{
+				"publicKey":  user.WGPubKey,
+				"allowedIPs": []string{"0.0.0.0/0", "::/0"},
+			})
+		}
+	}
+
+	// Backward compatibility: also add the legacy single-peer field if set
+	if inbound.WGPeerPubKey != "" && !seen[inbound.WGPeerPubKey] {
+		seen[inbound.WGPeerPubKey] = true
+		peers = append(peers, map[string]interface{}{
+			"publicKey":  inbound.WGPeerPubKey,
+			"allowedIPs": []string{"0.0.0.0/0", "::/0"},
+		})
+	}
+
 	settings := map[string]interface{}{
 		"secretKey": inbound.WGSecretKey,
 		"address":   []string{localIP},
-		"peers": []map[string]interface{}{
-			{
-				"publicKey":  inbound.WGPeerPubKey,
-				"allowedIPs": []string{"0.0.0.0/0", "::/0"},
-			},
-		},
-		"mtu": mtu,
+		"peers":     peers,
+		"mtu":       mtu,
 	}
 
 	listen := inbound.Listen

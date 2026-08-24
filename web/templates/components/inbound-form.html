@@ -166,11 +166,12 @@
         </div>
 
         <div class="form-group">
-            <label for="wg_peer_pub_key">对端公钥 (Peer Public Key)</label>
+            <label for="wg_peer_pub_key">对端公钥 (Peer Public Key) <span style="font-size: 0.75em; color: var(--text-secondary);">— 可选</span></label>
             <input type="text" id="wg_peer_pub_key" name="wg_peer_pub_key"
                 value="{{if .Inbound}}{{.Inbound.WGPeerPubKey}}{{end}}"
-                placeholder="对端 xray-panel 节点的 WireGuard 公钥">
-            <small class="form-hint">对端节点的公钥，用于验证连接来源</small>
+                placeholder="对端 xray-panel 节点的 WireGuard 公钥（可选）">
+            <small class="form-hint">兼容旧模式：直接填入单个对端公钥。<br>
+                <strong>推荐方式</strong>：在「用户管理」中为每个客户端填入其 WireGuard 公钥，即可支持多客户端同时连接。</small>
         </div>
 
         <div class="form-group">

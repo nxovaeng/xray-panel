@@ -99,6 +99,12 @@ function testOutboundFromList(outboundId) {
             if (data.latency_ms) {
                 message += ' (' + data.latency_ms + 'ms)';
             }
+            if (data.outbound_ip) {
+                message += '<br>真实出口 IP: ' + data.outbound_ip;
+            }
+            if (data.location) {
+                message += '<br>地理位置: ' + data.location;
+            }
             showNotification(message, 'success');
         } else {
             testBtn.innerHTML = '<i data-lucide="x" style="width: 16px; height: 16px;"></i>';
