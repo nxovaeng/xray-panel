@@ -6,12 +6,13 @@
 #   2. 安装后管理 (update / uninstall / geo) — 由根目录 xray-panel.sh 的菜单调用
 #
 # 用法:
-#   bash install.sh install              在线安装（从 GitHub 下载最新版）
-#   bash install.sh install <pkg.tar.gz> 本地安装（解压包内直接运行）
-#   bash install.sh update [version]     更新面板（默认 latest）
-#   bash install.sh uninstall            卸载面板
-#   bash install.sh update-geo           更新 geoip.dat / geosite.dat
-#   bash install.sh status               查看面板及 Geo 文件状态
+#   curl -Ls https://raw.githubusercontent.com/nxovaeng/xray-panel/master/scripts/install.sh | sudo bash -s -- install
+#   bash install.sh install <pkg.tar.gz>  # 本地包安装
+#   bash install.sh update [version]      # 更新面板二进制（默认 latest）
+#   bash install.sh update-tool           # 仅更新交互管理脚本 xray-panel
+#   bash install.sh uninstall             # 卸载
+#   bash install.sh update-geo            # 更新 geo 文件
+#   bash install.sh status                # 查看状态
 #
 # 可选环境变量:
 #   GITHUB_REPO   - 仓库 (默认: nxovaeng/xray-panel)
@@ -103,6 +104,17 @@ resolve_version() {
 # ── 下载 panel 二进制 ─────────────────────────────────────────────────────────
 download_binary() {
     # Places the binary at $BINARY_PATH. Requires PANEL_VERSION and ARCH set.
+
+    # 版本相同时跳过（update 命令也会调用此函数，这里做二次保护）
+    if [[ -f "$BINARY_PATH" ]]; then
+        local cur_ver
+        cur_ver=$("$BINARY_PATH" version 2>/dev/null | grep -oP 'version \K[^ ]+' || echo "")
+        if [[ -n "$cur_ver" && "$cur_ver" == "${PANEL_VERSION#v}" ]]; then
+            ok "已是目标版本 ($cur_ver)，跳过下载"
+            return
+        fi
+    fi
+
     local url="https://github.com/$GITHUB_REPO/releases/download/${PANEL_VERSION}/xray-panel-${PANEL_VERSION}-linux-${ARCH}.tar.gz"
     info "下载: $url"
 
@@ -119,6 +131,14 @@ download_binary() {
     [[ -n "$bin" ]] || die "压缩包内未找到 panel 二进制"
 
     chmod +x "$bin"
+
+    # 停止服务避免 "Text file busy"
+    if systemctl is-active --quiet xray-panel 2>/dev/null; then
+        info "停止面板服务..."
+        systemctl stop xray-panel
+    fi
+    # 删除旧二进制（运行中的文件不能直接覆盖）
+    rm -f "$BINARY_PATH"
     cp "$bin" "$BINARY_PATH"
     ok "面板二进制已安装 ($PANEL_VERSION)"
 }
@@ -134,15 +154,34 @@ install_xray_core() {
     ok "Xray-core 安装完成"
 }
 
-# ── 配置生成 ──────────────────────────────────────────────────────────────────
+# ── 配置模板 & 配置生成 ───────────────────────────────────────────────────────
+copy_config_template() {
+    # 始终把 config.yaml.example 更新到 conf/，方便用户参考最新字段
+    mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
+    local example_src=""
+
+    # 优先从解压目录取（本地包安装）
+    if [[ -n "${EXTRACTED_DIR:-}" && -f "$EXTRACTED_DIR/conf/config.yaml.example" ]]; then
+        example_src="$EXTRACTED_DIR/conf/config.yaml.example"
+    fi
+
+    if [[ -n "$example_src" ]]; then
+        cp "$example_src" "$CONFIG_DIR/config.yaml.example"
+        ok "配置模板已更新: $CONFIG_DIR/config.yaml.example"
+    fi
+    # 在线安装时模板随二进制包一起发布，跳过（避免额外网络请求）
+}
+
 generate_config() {
+    mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
+
     if [[ -f "$CONFIG_DIR/config.yaml" ]]; then
-        warn "配置文件已存在，跳过生成"
+        warn "config.yaml 已存在，保留原有配置（不覆盖）"
         return
     fi
+
     local secret
     secret=$(head /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 48)
-    mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
     cat > "$CONFIG_DIR/config.yaml" <<EOF
 # Xray Panel 配置文件  生成于 $(date '+%Y-%m-%d %H:%M:%S')
 
@@ -221,39 +260,51 @@ backup() {
     ok "备份已创建: $dst"
 }
 
-# ── 安装交互管理工具 ──────────────────────────────────────────────────────────
+# ── 安装/更新交互管理工具 ────────────────────────────────────────────────────
+# force=true 时无条件覆盖（供 update-tool 使用）；默认仅在不存在时安装。
 install_management_tool() {
+    local force="${1:-false}"
     local tool_dst="$INSTALL_DIR/xray-panel.sh"
     local link_dst="/usr/bin/xray-panel"
 
-    # 优先从已解压的包目录复制（本地安装场景）
-    # EXTRACTED_DIR 由 cmd_install 本地安装分支设置
+    if [[ "$force" == "false" && -f "$tool_dst" ]]; then
+        warn "管理工具已存在，跳过（使用 update-tool 可强制更新）"
+        # 确保软链接存在
+        ln -sf "$tool_dst" "$link_dst"
+        return
+    fi
+
+    # 优先从解压目录复制（本地包安装）
     if [[ -n "${EXTRACTED_DIR:-}" && -f "$EXTRACTED_DIR/xray-panel.sh" ]]; then
         cp "$EXTRACTED_DIR/xray-panel.sh" "$tool_dst"
         ok "管理工具已从安装包复制"
     else
-        # 在线安装：从 GitHub 下载
-        info "下载交互管理工具..."
+        # 从 GitHub master 下载最新版
+        info "下载最新管理工具..."
         local url="https://raw.githubusercontent.com/$GITHUB_REPO/master/xray-panel.sh"
-        if curl -fsSL "$url" -o "$tool_dst"; then
-            ok "管理工具已下载"
+        local tmp_tool
+        tmp_tool=$(mktemp)
+        # shellcheck disable=SC2064
+        trap "rm -f $tmp_tool" RETURN
+        if curl -fsSL "$url" -o "$tmp_tool" && head -1 "$tmp_tool" | grep -q '^#!'; then
+            mv "$tmp_tool" "$tool_dst"
+            ok "管理工具已下载（最新版）"
         else
-            warn "管理工具下载失败，可稍后手动安装（不影响面板运行）"
+            rm -f "$tmp_tool"
+            warn "管理工具下载失败，可稍后运行 update-tool 重试（不影响面板运行）"
             return
         fi
     fi
 
     chmod +x "$tool_dst"
-
-    # 软链接到 /usr/bin/xray-panel，使其全局可用
     ln -sf "$tool_dst" "$link_dst"
-    ok "管理工具已安装: 输入 ${CYAN}xray-panel${PLAIN} 即可打开管理菜单"
+    ok "管理工具已就绪: 输入 ${CYAN}xray-panel${PLAIN} 即可打开管理菜单"
 }
 
 
 cmd_install() {
     local local_pkg="${1:-}"   # optional: path to local .tar.gz
-    EXTRACTED_DIR=""           # 解压目录，供 install_management_tool 使用
+    EXTRACTED_DIR=""           # 解压根目录，供 copy_config_template / install_management_tool 使用
 
     need_root; detect_arch; detect_os; install_deps
 
@@ -271,9 +322,15 @@ cmd_install() {
         bin=$(find "$tmp" \( -name "panel-linux-${ARCH}" -o -name "panel" \) -type f | head -1)
         [[ -n "$bin" ]] || die "压缩包内未找到 panel 二进制"
         chmod +x "$bin"
+        # 停止旧服务 + 删除旧二进制，避免 Text file busy
+        if systemctl is-active --quiet xray-panel 2>/dev/null; then
+            info "停止面板服务..."
+            systemctl stop xray-panel
+        fi
+        rm -f "$BINARY_PATH"
         cp "$bin" "$BINARY_PATH"
-        # 记录解压根目录，供管理工具安装时从包内提取 xray-panel.sh
-        EXTRACTED_DIR=$(find "$tmp" -name "xray-panel.sh" -type f | head -1 | xargs -r dirname)
+        # 记录解压根目录（包含 conf/ scripts/ xray-panel.sh）
+        EXTRACTED_DIR=$(find "$tmp" -name "xray-panel.sh" -type f | head -1 | xargs -r dirname 2>/dev/null || echo "")
         ok "面板二进制已安装（本地包）"
     else
         # ── 在线安装 ──
@@ -282,7 +339,8 @@ cmd_install() {
     fi
 
     install_xray_core
-    generate_config
+    copy_config_template      # 复制/更新 config.yaml.example
+    generate_config           # 仅在无 config.yaml 时生成
     setup_service
     install_management_tool   # 安装 xray-panel 交互管理工具
     update_geodata            # 初始安装时顺带更新一次 geo 文件
@@ -292,6 +350,7 @@ cmd_install() {
     hr
     echo -e "  安装目录: ${CYAN}$INSTALL_DIR${PLAIN}"
     echo -e "  配置文件: ${CYAN}$CONFIG_DIR/config.yaml${PLAIN}"
+    echo -e "  配置模板: ${CYAN}$CONFIG_DIR/config.yaml.example${PLAIN}"
     echo -e "  管理工具: ${CYAN}xray-panel${PLAIN}"
     echo ""
     echo -e "${YELLOW}下一步:${PLAIN}"
@@ -324,10 +383,7 @@ cmd_update() {
 
     backup
 
-    info "停止面板服务..."
-    systemctl stop xray-panel 2>/dev/null || true
-
-    download_binary
+    download_binary  # 内部已处理停服 + rm -f 旧文件
 
     info "启动面板服务..."
     systemctl start xray-panel
@@ -458,6 +514,31 @@ update_geodata() {
 }
 
 cmd_update_geo() { update_geodata "$XRAY_ASSETS" "true"; }
+
+# ── 子命令: update-tool ───────────────────────────────────────────────────────
+cmd_update_tool() {
+    need_root
+    EXTRACTED_DIR=""  # 无本地包，强制从网络拉取
+
+    hr
+    echo -e "更新 xray-panel 交互管理脚本"
+    hr
+
+    local tool_dst="$INSTALL_DIR/xray-panel.sh"
+    local cur_mtime=""
+    [[ -f "$tool_dst" ]] && cur_mtime=$(stat -c '%y' "$tool_dst" | cut -d'.' -f1)
+
+    install_management_tool "force"
+
+    local new_mtime=""
+    [[ -f "$tool_dst" ]] && new_mtime=$(stat -c '%y' "$tool_dst" | cut -d'.' -f1)
+
+    if [[ -n "$cur_mtime" && "$cur_mtime" != "$new_mtime" ]]; then
+        echo -e "  ${YELLOW}更新前:${PLAIN} $cur_mtime"
+        echo -e "  ${GREEN}更新后:${PLAIN} $new_mtime"
+    fi
+    echo ""
+}
 
 # ── 子命令: status ────────────────────────────────────────────────────────────
 cmd_status() {
