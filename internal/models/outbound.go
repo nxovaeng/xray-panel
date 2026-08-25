@@ -34,7 +34,7 @@ type Outbound struct {
 
 	// WireGuard specific settings (WARP, Proton VPN 等)
 	WGSecretKey    string `json:"-" form:"wg_secret_key"`                 // WireGuard private key
-	WGClientPubKey string `json:"wg_client_pub_key" form:"-" gorm:"column:wg_client_pub_key"` // Client public key derived from WGSecretKey (auto-computed, read-only)
+	WGClientPubKey string `json:"wg_client_pub_key" form:"wg_client_pub_key" gorm:"column:wg_client_pub_key"` // Client public key (submitted by form or derived from WGSecretKey)
 	WGPublicKey    string `json:"wg_public_key" form:"wg_public_key"`    // WireGuard peer/server public key
 	WGReserved     string `json:"wg_reserved" form:"wg_reserved"`        // Reserved bytes (WARP only, optional)
 	WGLocalIPv4    string `json:"wg_local_ipv4" form:"wg_local_ipv4"`    // Assigned IPv4

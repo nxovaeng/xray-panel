@@ -1043,8 +1043,9 @@ func (h *Handler) CreateOutbound(c *gin.Context) {
 				outbound.Port = port
 			}
 		}
-		// Derive and persist the client public key from the private key
-		if outbound.WGSecretKey != "" {
+		// Client public key: prefer the value submitted by the form (set by JS after key generation).
+		// Fall back to deriving from the private key only when the form didn't supply one.
+		if outbound.WGClientPubKey == "" && outbound.WGSecretKey != "" {
 			if pubKey, err := utils.DeriveWGPublicKey(outbound.WGSecretKey); err == nil {
 				outbound.WGClientPubKey = pubKey
 			} else {
@@ -1118,15 +1119,16 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 		// Private key: keep existing value when the form field is left blank
 		if outbound.WGSecretKey == "" {
 			outbound.WGSecretKey = existing.WGSecretKey
-			outbound.WGClientPubKey = existing.WGClientPubKey // keep derived pubkey too
-		} else {
-			// New private key submitted — re-derive the client public key
+			outbound.WGClientPubKey = existing.WGClientPubKey // keep existing pubkey too
+		} else if outbound.WGClientPubKey == "" {
+			// New private key but no public key from form — derive it as fallback
 			if pubKey, err := utils.DeriveWGPublicKey(outbound.WGSecretKey); err == nil {
 				outbound.WGClientPubKey = pubKey
 			} else {
 				logger.Warn("UpdateOutbound: failed to derive WG client public key: %v", err)
 			}
 		}
+		// else: both private key and public key provided by form — use them as-is
 	}
 
 	// Handle Trojan-specific fields (trojan_server -> Server, trojan_port -> Port)
@@ -1270,8 +1272,9 @@ func (h *Handler) UpdateRouting(c *gin.Context) {
 		c.String(http.StatusNotFound, "Routing rule not found")
 		return
 	}
-	rule.ID = existing.ID
-	rule.Enabled = existing.Enabled // Preserve enabled status
+	rule.ID        = existing.ID
+	rule.Enabled   = existing.Enabled   // Preserve enabled status
+	rule.CreatedAt = existing.CreatedAt // Preserve creation timestamp
 	if err := h.db.Save(&rule).Error; err != nil {
 		c.String(http.StatusInternalServerError, "Error updating routing rule")
 		return

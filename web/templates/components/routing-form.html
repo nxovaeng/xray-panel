@@ -191,42 +191,37 @@
         const protocolFields = document.getElementById('protocol-fields');
         
         if (!inboundFields || !domainFields || !ipFields || !geositeFields || !geoipFields || !protocolFields) return;
-        
-        // Hide all fields first
-        inboundFields.style.display = 'none';
-        domainFields.style.display = 'none';
-        ipFields.style.display = 'none';
-        geositeFields.style.display = 'none';
-        geoipFields.style.display = 'none';
-        protocolFields.style.display = 'none';
-        
-        // Remove required from all rule-specific fields
-        inboundFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
-        domainFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
-        ipFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
-        geositeFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
-        geoipFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
-        protocolFields.querySelectorAll('input, select, textarea').forEach(el => el.removeAttribute('required'));
-        
-        // Show and set required for selected type
-        if (type === 'inbound') {
-            inboundFields.style.display = 'block';
-            document.getElementById('inbound_tag').setAttribute('required', 'required');
-        } else if (type === 'domain') {
-            domainFields.style.display = 'block';
-            document.getElementById('domains').setAttribute('required', 'required');
-        } else if (type === 'ip') {
-            ipFields.style.display = 'block';
-            document.getElementById('ips').setAttribute('required', 'required');
-        } else if (type === 'geosite') {
-            geositeFields.style.display = 'block';
-            document.getElementById('geosite_tags').setAttribute('required', 'required');
-        } else if (type === 'geoip') {
-            geoipFields.style.display = 'block';
-            document.getElementById('geoip_codes').setAttribute('required', 'required');
-        } else if (type === 'protocol') {
-            protocolFields.style.display = 'block';
-            document.getElementById('protocols').setAttribute('required', 'required');
+
+        const allGroups = [inboundFields, domainFields, ipFields, geositeFields, geoipFields, protocolFields];
+
+        // Hide all, disable all inputs (disabled fields are not submitted)
+        allGroups.forEach(g => {
+            g.style.display = 'none';
+            g.querySelectorAll('input, select, textarea').forEach(el => {
+                el.disabled = true;
+                el.removeAttribute('required');
+            });
+        });
+
+        // Show and enable only the active group
+        let activeGroup = null;
+        let requiredId = null;
+        if (type === 'inbound')  { activeGroup = inboundFields;  requiredId = 'inbound_tag'; }
+        else if (type === 'domain')   { activeGroup = domainFields;   requiredId = 'domains'; }
+        else if (type === 'ip')       { activeGroup = ipFields;        requiredId = 'ips'; }
+        else if (type === 'geosite')  { activeGroup = geositeFields;   requiredId = 'geosite_tags'; }
+        else if (type === 'geoip')    { activeGroup = geoipFields;     requiredId = 'geoip_codes'; }
+        else if (type === 'protocol') { activeGroup = protocolFields;  requiredId = 'protocols'; }
+
+        if (activeGroup) {
+            activeGroup.style.display = 'block';
+            activeGroup.querySelectorAll('input, select, textarea').forEach(el => {
+                el.disabled = false;
+            });
+            if (requiredId) {
+                const el = document.getElementById(requiredId);
+                if (el) el.setAttribute('required', 'required');
+            }
         }
     }
     
