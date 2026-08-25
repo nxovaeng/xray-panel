@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"xray-panel/internal/utils"
 )
 
 // handleGenerateWGKeys generates a WireGuard (Curve25519) key pair.
@@ -20,6 +22,12 @@ func (s *Server) handleGenerateWGKeys(c *gin.Context) {
 
 	privB64 := base64.StdEncoding.EncodeToString(privKey.Bytes())
 	pubB64 := base64.StdEncoding.EncodeToString(privKey.PublicKey().Bytes())
+
+	// Sanity-check via shared utility (also validates round-trip)
+	if _, err := utils.DeriveWGPublicKey(privB64); err != nil {
+		jsonError(c, http.StatusInternalServerError, "Key derivation check failed: "+err.Error())
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"private_key": privB64,

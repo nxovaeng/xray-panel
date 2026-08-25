@@ -599,7 +599,8 @@ ${CYAN}Xray Panel 管理脚本${PLAIN}
 命令:
   install              在线安装（从 GitHub 自动下载最新版）
   install <pkg.tar.gz> 本地安装（指定本地压缩包）
-  update [version]     更新面板（默认 latest）
+  update [version]     更新面板二进制（默认 latest）
+  update-tool          仅更新交互管理脚本 xray-panel
   uninstall            卸载面板
   update-geo           更新 geoip.dat / geosite.dat
   status               查看面板及 Geo 文件状态
@@ -626,6 +627,7 @@ main() {
     case "$cmd" in
         install)    cmd_install "$@" ;;
         update)     cmd_update  "$@" ;;
+        update-tool) cmd_update_tool ;;
         uninstall)  cmd_uninstall   ;;
         update-geo) cmd_update_geo  ;;
         status)     cmd_status      ;;

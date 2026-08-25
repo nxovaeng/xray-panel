@@ -27,7 +27,7 @@
                     {{.Port}}
                 {{end}}
             </td>
-            <td>{{.Transport}}</td>
+            <td>{{if eq .Protocol "wireguard"}}—{{else}}{{.Transport}}{{end}}</td>
             <td>
                 {{if .Domain}}
                     <div style="display:flex;flex-direction:column;gap:0.2rem;">

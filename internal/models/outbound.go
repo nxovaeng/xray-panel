@@ -33,13 +33,14 @@ type Outbound struct {
 	Password string `json:"-" form:"password"`        // SOCKS5 auth password
 
 	// WireGuard specific settings (WARP, Proton VPN 等)
-	WGSecretKey string `json:"-" form:"wg_secret_key"`             // WireGuard private key
-	WGPublicKey string `json:"wg_public_key" form:"wg_public_key"` // WireGuard server public key
-	WGReserved  string `json:"wg_reserved" form:"wg_reserved"`     // Reserved bytes (WARP only, optional)
-	WGLocalIPv4 string `json:"wg_local_ipv4" form:"wg_local_ipv4"` // Assigned IPv4
-	WGLocalIPv6 string `json:"wg_local_ipv6" form:"wg_local_ipv6"` // Assigned IPv6
-	WGMTU       int    `json:"wg_mtu" form:"wg_mtu"`               // MTU (default: 1420)
-	WGDNS       string `json:"wg_dns" form:"wg_dns"`               // DNS servers (optional, for reference)
+	WGSecretKey    string `json:"-" form:"wg_secret_key"`                 // WireGuard private key
+	WGClientPubKey string `json:"wg_client_pub_key" form:"-" gorm:"column:wg_client_pub_key"` // Client public key derived from WGSecretKey (auto-computed, read-only)
+	WGPublicKey    string `json:"wg_public_key" form:"wg_public_key"`    // WireGuard peer/server public key
+	WGReserved     string `json:"wg_reserved" form:"wg_reserved"`        // Reserved bytes (WARP only, optional)
+	WGLocalIPv4    string `json:"wg_local_ipv4" form:"wg_local_ipv4"`    // Assigned IPv4
+	WGLocalIPv6    string `json:"wg_local_ipv6" form:"wg_local_ipv6"`    // Assigned IPv6
+	WGMTU          int    `json:"wg_mtu" form:"wg_mtu"`                  // MTU (default: 1420)
+	WGDNS          string `json:"wg_dns" form:"wg_dns"`                  // DNS servers (optional, for reference)
 
 	// Trojan specific settings (自己的其他服务器，落地IP用途)
 	TrojanPassword string `json:"-" form:"trojan_password"`             // Trojan password

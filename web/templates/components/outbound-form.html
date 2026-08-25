@@ -89,11 +89,16 @@
             <label for="wg_local_pub_key">本地公钥 (Client Public Key) <span style="font-size: 0.75em; color: var(--text-secondary);">— 自动派生</span></label>
             <div class="input-with-button">
                 <input type="text" id="wg_local_pub_key" readonly
-                    placeholder="生成密钥对后自动显示，请将此公钥填入对端入站配置"
+                    value="{{if and .Outbound .Outbound.WGClientPubKey}}{{.Outbound.WGClientPubKey}}{{end}}"
+                    placeholder="{{if and .Outbound .Outbound.WGClientPubKey}}{{.Outbound.WGClientPubKey}}{{else}}生成密钥对后自动显示，请将此公钥填入对端入站配置{{end}}"
                     style="font-family: monospace; font-size: 0.9rem; background: rgba(0,0,0,0.1);">
                 <button type="button" class="btn btn-sm" onclick="copyLocalPubKey()" title="复制公钥">📋 复制</button>
             </div>
+            {{if and .Outbound .Outbound.WGClientPubKey}}
+            <small class="form-hint" style="color: var(--success);">✓ 已保存。将此公钥填入对端节点的 WireGuard 入站 / 用户管理中</small>
+            {{else}}
             <small class="form-hint">由私钥派生的本地公钥。将此公钥填入对端节点的 WireGuard 入站 / 用户管理中</small>
+            {{end}}
         </div>
         <div class="form-group">
             <label for="wg_public_key">服务器公钥 (Peer Public Key)</label>

@@ -347,11 +347,15 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 		}
 	}
 
-	// Preserve traffic used
-	user.TrafficUsed = existingUser.TrafficUsed
-
-	// Use Save to avoid GORM skipping zero-value bool fields (e.g. Enabled=false)
-	user.ID = existingUser.ID
+	// Preserve fields that must not be overwritten by the form:
+	// SubPath   — subscription URL key, must never change after creation
+	// TrafficUsed / TrafficReset — managed by traffic sync, not the edit form
+	// CreatedAt  — immutable
+	user.ID           = existingUser.ID
+	user.SubPath      = existingUser.SubPath
+	user.TrafficUsed  = existingUser.TrafficUsed
+	user.TrafficReset = existingUser.TrafficReset
+	user.CreatedAt    = existingUser.CreatedAt
 	if err := h.db.Save(&user).Error; err != nil {
 		logger.Error("Failed to update user %s: %v", id, err)
 		c.String(http.StatusInternalServerError, "Error updating user: "+err.Error())
@@ -1039,6 +1043,14 @@ func (h *Handler) CreateOutbound(c *gin.Context) {
 				outbound.Port = port
 			}
 		}
+		// Derive and persist the client public key from the private key
+		if outbound.WGSecretKey != "" {
+			if pubKey, err := utils.DeriveWGPublicKey(outbound.WGSecretKey); err == nil {
+				outbound.WGClientPubKey = pubKey
+			} else {
+				logger.Warn("CreateOutbound: failed to derive WG client public key: %v", err)
+			}
+		}
 	}
 
 	// Handle Trojan-specific fields (trojan_server -> Server, trojan_port -> Port)
@@ -1084,6 +1096,13 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 		return
 	}
 
+	// Load existing record first — needed to preserve secret fields and metadata
+	var existing models.Outbound
+	if err := h.db.First(&existing, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Outbound not found")
+		return
+	}
+
 	// Handle WireGuard-specific fields (wg_server -> Server, wg_port -> Port)
 	if outbound.Type == models.OutboundWireGuard {
 		wgServer := c.PostForm("wg_server")
@@ -1094,6 +1113,18 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 		if wgPortStr != "" {
 			if port, err := strconv.Atoi(wgPortStr); err == nil && port > 0 {
 				outbound.Port = port
+			}
+		}
+		// Private key: keep existing value when the form field is left blank
+		if outbound.WGSecretKey == "" {
+			outbound.WGSecretKey = existing.WGSecretKey
+			outbound.WGClientPubKey = existing.WGClientPubKey // keep derived pubkey too
+		} else {
+			// New private key submitted — re-derive the client public key
+			if pubKey, err := utils.DeriveWGPublicKey(outbound.WGSecretKey); err == nil {
+				outbound.WGClientPubKey = pubKey
+			} else {
+				logger.Warn("UpdateOutbound: failed to derive WG client public key: %v", err)
 			}
 		}
 	}
@@ -1110,19 +1141,18 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 				outbound.Port = port
 			}
 		}
+		// Keep existing Trojan password when left blank
+		if outbound.TrojanPassword == "" {
+			outbound.TrojanPassword = existing.TrojanPassword
+		}
 	}
 
-	// Set update timestamp
+	// Preserve immutable / non-form fields
+	outbound.ID        = existing.ID
+	outbound.Enabled   = existing.Enabled
+	outbound.CreatedAt = existing.CreatedAt
 	outbound.UpdatedAt = time.Now()
 
-	// Use Save to avoid GORM skipping zero-value bool fields (e.g. Enabled=false)
-	var existing models.Outbound
-	if err := h.db.First(&existing, "id = ?", id).Error; err != nil {
-		c.String(http.StatusNotFound, "Outbound not found")
-		return
-	}
-	outbound.ID = existing.ID
-	outbound.Enabled = existing.Enabled // Preserve enabled status
 	if err := h.db.Save(&outbound).Error; err != nil {
 		logger.Error("Failed to update outbound %s: %v", id, err)
 		c.String(http.StatusInternalServerError, "Error updating outbound: "+err.Error())
