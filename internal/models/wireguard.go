@@ -49,7 +49,7 @@ func DefaultPostUp(iface string) string {
 	if iface == "" {
 		iface = "%i"
 	}
-	return fmt.Sprintf("iptables -A FORWARD -i %s -j ACCEPT; iptables -A FORWARD -o %s -m state --state RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -A POSTROUTING -o $(ip route show default | awk '{print $5; exit}') -j MASQUERADE; iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", iface, iface)
+	return fmt.Sprintf("iptables -I FORWARD 1 -i %s -j ACCEPT; iptables -I FORWARD 1 -o %s -j ACCEPT; iptables -t nat -A POSTROUTING -s 10.0.0.0/8 ! -o %s -j MASQUERADE; iptables -t nat -A POSTROUTING -s 172.16.0.0/12 ! -o %s -j MASQUERADE; iptables -t mangle -I FORWARD 1 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", iface, iface, iface, iface)
 }
 
 // DefaultPostDown returns the default teardown iptables rules.
@@ -57,7 +57,7 @@ func DefaultPostDown(iface string) string {
 	if iface == "" {
 		iface = "%i"
 	}
-	return fmt.Sprintf("iptables -D FORWARD -i %s -j ACCEPT; iptables -D FORWARD -o %s -m state --state RELATED,ESTABLISHED -j ACCEPT; iptables -t nat -D POSTROUTING -o $(ip route show default | awk '{print $5; exit}') -j MASQUERADE; iptables -t mangle -D FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", iface, iface)
+	return fmt.Sprintf("iptables -D FORWARD -i %s -j ACCEPT; iptables -D FORWARD -o %s -j ACCEPT; iptables -t nat -D POSTROUTING -s 10.0.0.0/8 ! -o %s -j MASQUERADE; iptables -t nat -D POSTROUTING -s 172.16.0.0/12 ! -o %s -j MASQUERADE; iptables -t mangle -D FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu", iface, iface, iface, iface)
 }
 
 // DeriveWGPublicKey derives the WireGuard (Curve25519) public key from base64 private key.
@@ -89,6 +89,11 @@ func GetWGServerConfig(db *gorm.DB) (*WGServerConfig, error) {
 	var cfg WGServerConfig
 	err := db.First(&cfg).Error
 	if err == nil {
+		if strings.Contains(cfg.PostUp, "ip route show default") {
+			cfg.PostUp = DefaultPostUp("%i")
+			cfg.PostDown = DefaultPostDown("%i")
+			_ = db.Save(&cfg)
+		}
 		return &cfg, nil
 	}
 	if err != gorm.ErrRecordNotFound {

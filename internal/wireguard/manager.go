@@ -299,13 +299,13 @@ func (m *Manager) GenerateWG0Conf(server *models.WGServerConfig, peers []models.
 	}
 	if server.EnableNAT {
 		postUp := strings.TrimSpace(server.PostUp)
-		if postUp == "" {
+		if postUp == "" || strings.Contains(postUp, "ip route show default") {
 			postUp = models.DefaultPostUp("%i")
 		}
 		sb.WriteString(fmt.Sprintf("PostUp = %s\n", postUp))
 
 		postDown := strings.TrimSpace(server.PostDown)
-		if postDown == "" {
+		if postDown == "" || strings.Contains(postDown, "ip route show default") {
 			postDown = models.DefaultPostDown("%i")
 		}
 		sb.WriteString(fmt.Sprintf("PostDown = %s\n", postDown))
