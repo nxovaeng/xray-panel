@@ -1,0 +1,96 @@
+{{define "components/wg-peer-form.html"}}
+<form hx-post="{{if .Peer}}/api/wireguard/peers/{{.Peer.ID}}{{else}}/api/wireguard/peers{{end}}"
+    hx-target="#wg-peers-table"
+    hx-swap="innerHTML">
+
+    <div class="form-group">
+        <label for="wg_peer_name">客户端名称 / 备注 <span style="color: var(--danger);">*</span></label>
+        <input type="text" id="wg_peer_name" name="name"
+            value="{{if .Peer}}{{.Peer.Name}}{{end}}"
+            placeholder="如: 中转VPS-东京 / 落地机-01" required>
+        <small class="form-hint">为对端节点起一个易于识别的名称</small>
+    </div>
+
+    <div class="form-group">
+        <label for="wg_peer_allowed_ips">分配内网虚拟 IP <span style="color: var(--danger);">*</span></label>
+        <input type="text" id="wg_peer_allowed_ips" name="allowed_ips"
+            value="{{if .Peer}}{{.Peer.AllowedIPs}}{{else}}{{.NextIP}}{{end}}"
+            placeholder="如: 10.0.0.2/32" required>
+        <small class="form-hint">分配给该客户端的隧道 IP，必须属于服务端网段（如 {{.Server.Address}}），且每个客户端不能重复</small>
+    </div>
+
+    <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <label for="wg_peer_pub_key" style="margin: 0;">客户端公钥 (Public Key) <span style="color: var(--danger);">*</span></label>
+            <button type="button" class="btn btn-sm btn-outline" style="border-color: rgba(99,102,241,0.4); color: var(--accent); padding: 2px 8px; font-size: 0.78rem;" onclick="generatePeerKeys()">
+                <i data-lucide="key" style="width: 12px; height: 12px;"></i> 一键生成客户端密钥对
+            </button>
+        </div>
+        <input type="text" id="wg_peer_pub_key" name="public_key"
+            value="{{if .Peer}}{{.Peer.PublicKey}}{{end}}"
+            placeholder="粘贴对端公钥，或点击右上角「一键生成」" required>
+        <small class="form-hint">客户端的 Curve25519 公钥（44 字符 Base64）</small>
+    </div>
+
+    <div class="form-group">
+        <label for="wg_peer_priv_key">客户端私钥 (Private Key) <span style="font-size: 0.75rem; color: var(--text-secondary);">(可选保存)</span></label>
+        <input type="text" id="wg_peer_priv_key" name="private_key"
+            value="{{if .Peer}}{{.Peer.PrivateKey}}{{end}}"
+            placeholder="如使用一键生成会自动填入，保存后可直接导出完整客户端配置">
+        <small class="form-hint">服务端仅需要公钥。但如果在此处保存私钥，面板可以直接生成包含私钥的完整配置（直接一键导入对端 Xray）</small>
+    </div>
+
+    <div class="form-group">
+        <label for="wg_peer_psk">预共享密钥 (Preshared Key) <span style="font-size: 0.75rem; color: var(--text-secondary);">(可选)</span></label>
+        <input type="text" id="wg_peer_psk" name="preshared_key"
+            value="{{if .Peer}}{{.Peer.PresharedKey}}{{end}}"
+            placeholder="用于抗量子计算攻击的预共享密钥（通常留空）">
+    </div>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+        <div class="form-group">
+            <label for="wg_peer_endpoint">对端静态 Endpoint <span style="font-size: 0.75rem; color: var(--text-secondary);">(可选)</span></label>
+            <input type="text" id="wg_peer_endpoint" name="endpoint"
+                value="{{if .Peer}}{{.Peer.Endpoint}}{{end}}"
+                placeholder="如: 1.2.3.4:51820（通常留空即可）">
+            <small class="form-hint">若对端是动态 IP 或位于 NAT 后，请留空，握手时会自动捕获对端地址</small>
+        </div>
+
+        <div class="form-group">
+            <label for="wg_peer_keepalive">保活周期 (秒)</label>
+            <input type="number" id="wg_peer_keepalive" name="persistent_keepalive"
+                value="{{if .Peer}}{{.Peer.PersistentKeepalive}}{{else}}25{{end}}"
+                min="0" max="3600">
+            <small class="form-hint">NAT 穿透维持心跳（默认 25）</small>
+        </div>
+    </div>
+
+    <div class="form-actions" style="margin-top: 1.5rem;">
+        <button type="button" onclick="closeModal()" class="btn">取消</button>
+        <button type="submit" class="btn btn-primary">
+            {{if .Peer}}更新客户端{{else}}添加客户端{{end}}
+        </button>
+    </div>
+</form>
+
+<script>
+function generatePeerKeys() {
+    fetch('/api/wireguard/generate-keys', { method: 'POST' })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.public_key && data.private_key) {
+                document.getElementById('wg_peer_pub_key').value = data.public_key;
+                document.getElementById('wg_peer_priv_key').value = data.private_key;
+                showNotification('已生成客户端密钥对', 'success');
+            } else {
+                showNotification('密钥生成失败', 'error');
+            }
+        })
+        .catch(function(err) {
+            showNotification('请求失败: ' + err, 'error');
+        });
+}
+if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("form") || document.body : document.body]}); }
+</script>
+{{end}}
+

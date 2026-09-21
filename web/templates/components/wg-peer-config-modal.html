@@ -1,0 +1,87 @@
+{{define "components/wg-peer-config-modal.html"}}
+<div>
+    <div style="margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 1.05rem;">客户端: {{.Peer.Name}}</h3>
+            <span class="badge badge-info">{{.Peer.AllowedIPs}}</span>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0.35rem 0 0 0;">
+            服务器 Endpoint: <code>{{.ServerHost}}:{{.Server.ListenPort}}</code>
+        </p>
+    </div>
+
+    <!-- Tab 切换按钮 -->
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">
+        <button type="button" id="tab-btn-xray" class="btn btn-sm btn-primary" onclick="switchConfigTab('xray')">
+            <i data-lucide="zap" style="width: 13px; height: 13px;"></i> Xray 出站配置 (JSON)
+        </button>
+        <button type="button" id="tab-btn-wg" class="btn btn-sm btn-outline" onclick="switchConfigTab('wg')">
+            <i data-lucide="shield" style="width: 13px; height: 13px;"></i> 标准 WireGuard (wg0.conf)
+        </button>
+    </div>
+
+    <!-- Xray 配置面板 -->
+    <div id="tab-content-xray">
+        <div style="padding: 0.6rem 0.8rem; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 6px; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.5;">
+            <strong>用于 VPS 互联（客户端 VPS）：</strong> 在客户端 VPS 的 <code>xray-panel</code> 面板中，前往「出站配置」添加或更新 WireGuard 出站，将流量转发至此服务端。
+        </div>
+
+        <div style="position: relative;">
+            <pre id="xray-config-code" style="background: rgba(0, 0, 0, 0.25); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); overflow-x: auto; color: var(--text-primary); font-family: monospace; font-size: 0.82rem; line-height: 1.5; margin: 0; max-height: 320px;">{{.XrayJSON}}</pre>
+            <button class="btn btn-sm btn-primary" style="position: absolute; top: 0.5rem; right: 0.5rem;" onclick="copyCode('xray-config-code')">
+                <i data-lucide="copy" style="width: 13px; height: 13px;"></i> 复制 JSON
+            </button>
+        </div>
+    </div>
+
+    <!-- 标准 WireGuard 配置面板 -->
+    <div id="tab-content-wg" style="display: none;">
+        <div style="padding: 0.6rem 0.8rem; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 6px; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.5;">
+            <strong>通用标准配置：</strong> 可保存为 <code>wg0.conf</code> 用于 Linux、Windows、macOS 或移动端官方 WireGuard 客户端。
+        </div>
+
+        <div style="position: relative;">
+            <pre id="wg-config-code" style="background: rgba(0, 0, 0, 0.25); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); overflow-x: auto; color: var(--text-primary); font-family: monospace; font-size: 0.82rem; line-height: 1.5; margin: 0; max-height: 320px;">{{.WGConf}}</pre>
+            <button class="btn btn-sm btn-primary" style="position: absolute; top: 0.5rem; right: 0.5rem;" onclick="copyCode('wg-config-code')">
+                <i data-lucide="copy" style="width: 13px; height: 13px;"></i> 复制配置
+            </button>
+        </div>
+    </div>
+
+    <div class="form-actions" style="margin-top: 1.25rem;">
+        <button type="button" onclick="closeModal()" class="btn">关闭</button>
+    </div>
+</div>
+
+<script>
+function switchConfigTab(tab) {
+    var xrayTab = document.getElementById('tab-content-xray');
+    var wgTab = document.getElementById('tab-content-wg');
+    var btnXray = document.getElementById('tab-btn-xray');
+    var btnWg = document.getElementById('tab-btn-wg');
+
+    if (tab === 'xray') {
+        xrayTab.style.display = 'block';
+        wgTab.style.display = 'none';
+        btnXray.className = 'btn btn-sm btn-primary';
+        btnWg.className = 'btn btn-sm btn-outline';
+    } else {
+        xrayTab.style.display = 'none';
+        wgTab.style.display = 'block';
+        btnXray.className = 'btn btn-sm btn-outline';
+        btnWg.className = 'btn btn-sm btn-primary';
+    }
+}
+
+function copyCode(elementId) {
+    var text = document.getElementById(elementId).innerText;
+    navigator.clipboard.writeText(text).then(function() {
+        showNotification('已复制到剪贴板', 'success');
+    }, function() {
+        showNotification('复制失败', 'error');
+    });
+}
+if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("div") || document.body : document.body]}); }
+</script>
+{{end}}
+

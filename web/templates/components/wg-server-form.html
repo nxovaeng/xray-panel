@@ -1,0 +1,91 @@
+{{define "components/wg-server-form.html"}}
+<form hx-post="/api/wireguard/server" hx-swap="none">
+
+    <!-- 监听端口配置 -->
+    <div class="form-group">
+        <label for="wg_server_port">监听端口 (UDP) <span style="color: var(--danger);">*</span></label>
+        <div class="input-with-button" style="display: flex; gap: 0.5rem;">
+            <input type="number" id="wg_server_port" name="listen_port"
+                value="{{.Server.ListenPort}}"
+                min="1024" max="65535" required style="flex: 1;">
+            <button type="button" class="btn btn-outline" style="white-space: nowrap;" onclick="generateRandomWGPort()">
+                🎲 随机端口
+            </button>
+        </div>
+        <small class="form-hint">
+            WireGuard 服务端 UDP 监听端口（范围: 1024 - 65535）。修改后服务将自动重启生效，所有客户端配置中的 Endpoint 端口亦将自动同步。
+        </small>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+        <div class="form-group">
+            <label for="wg_server_address">服务端虚拟网段 (Address) <span style="color: var(--danger);">*</span></label>
+            <input type="text" id="wg_server_address" name="address"
+                value="{{.Server.Address}}" placeholder="10.0.0.1/24" required>
+            <small class="form-hint">接口的本地 CIDR 地址（如 10.0.0.1/24）</small>
+        </div>
+
+        <div class="form-group">
+            <label for="wg_server_mtu">MTU</label>
+            <input type="number" id="wg_server_mtu" name="mtu"
+                value="{{.Server.MTU}}" min="1280" max="1500">
+            <small class="form-hint">默认 1420（VPS 外网 MTU 1500 扣除包头）</small>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+            <label for="wg_server_priv_key" style="margin: 0;">服务端私钥 (Private Key) <span style="color: var(--danger);">*</span></label>
+            <button type="button" class="btn btn-sm btn-outline" style="border-color: rgba(239,68,68,0.4); color: var(--danger); padding: 2px 8px; font-size: 0.78rem;" onclick="generateServerKeys()">
+                重新生成密钥对
+            </button>
+        </div>
+        <input type="text" id="wg_server_priv_key" name="private_key"
+            value="{{.Server.PrivateKey}}" required>
+        <small class="form-hint">
+            <strong>注意：</strong>如果更改了服务端私钥，服务端公钥将会改变，所有已连接客户端必须更新其对端公钥！
+        </small>
+    </div>
+
+    <div class="form-group">
+        <label for="wg_server_post_up">PostUp 规则 (启动时执行)</label>
+        <textarea id="wg_server_post_up" name="post_up" rows="3" style="font-family: monospace; font-size: 0.82rem;">{{.Server.PostUp}}</textarea>
+        <small class="form-hint">默认自动获取出口网卡进行 iptables NAT 转发与 TCP MSS 钳制</small>
+    </div>
+
+    <div class="form-group">
+        <label for="wg_server_post_down">PostDown 规则 (停止时清理)</label>
+        <textarea id="wg_server_post_down" name="post_down" rows="2" style="font-family: monospace; font-size: 0.82rem;">{{.Server.PostDown}}</textarea>
+    </div>
+
+    <div class="form-actions" style="margin-top: 1.5rem;">
+        <button type="button" onclick="closeModal()" class="btn">取消</button>
+        <button type="submit" class="btn btn-primary">保存服务端配置</button>
+    </div>
+</form>
+
+<script>
+function generateRandomWGPort() {
+    var min = 15000;
+    var max = 59000;
+    var port = Math.floor(Math.random() * (max - min + 1)) + min;
+    document.getElementById('wg_server_port').value = port;
+}
+
+function generateServerKeys() {
+    if (!confirm('警告：重新生成服务端私钥将导致所有客户端无法连接，直到在客户端更新新公钥。确定要重新生成吗？')) {
+        return;
+    }
+    fetch('/api/wireguard/generate-keys', { method: 'POST' })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.private_key) {
+                document.getElementById('wg_server_priv_key').value = data.private_key;
+                showNotification('已生成新服务端密钥对', 'success');
+            }
+        });
+}
+if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("form") || document.body : document.body]}); }
+</script>
+{{end}}
+

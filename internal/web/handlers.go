@@ -17,6 +17,7 @@ import (
 	"xray-panel/internal/nginx"
 	"xray-panel/internal/system"
 	"xray-panel/internal/utils"
+	"xray-panel/internal/wireguard"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -103,6 +104,67 @@ func (h *Handler) SettingsPage(c *gin.Context) {
 		"Title": "Settings",
 		"Page":  "settings",
 		"Time":  time.Now().Format("2006-01-02 15:04:05"),
+	})
+}
+
+func (h *Handler) WireGuardPage(c *gin.Context) {
+	serverCfg, err := models.GetWGServerConfig(h.db)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to load WireGuard server config")
+		return
+	}
+
+	mgr := wireguard.NewManager(h.db)
+	status, _ := mgr.GetStatus()
+
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
+	}
+	serverHost := wireguard.CleanHost(host)
+
+	h.renderPage(c, "wireguard", gin.H{
+		"Title":      "WireGuard",
+		"Page":       "wireguard",
+		"ServerCfg":  serverCfg,
+		"Status":     status,
+		"ServerHost": serverHost,
+	})
+}
+
+func (h *Handler) LogsPage(c *gin.Context) {
+	service := c.DefaultQuery("service", "xray")
+	linesStr := c.DefaultQuery("lines", "100")
+	lines, _ := strconv.Atoi(linesStr)
+	if lines <= 0 {
+		lines = 100
+	}
+
+	h.renderPage(c, "logs", gin.H{
+		"Title":          "System Logs",
+		"Page":           "logs",
+		"CurrentService": service,
+		"CurrentLines":   lines,
+	})
+}
+
+func (h *Handler) LogsContent(c *gin.Context) {
+	service := c.DefaultQuery("service", "xray")
+	linesStr := c.DefaultQuery("lines", "100")
+	lines, _ := strconv.Atoi(linesStr)
+	if lines <= 0 {
+		lines = 100
+	}
+
+	content, err := system.GetServiceLogs(service, lines)
+	if err != nil {
+		content = "读取日志失败: " + err.Error()
+	}
+
+	c.HTML(http.StatusOK, "components/logs-terminal.html", gin.H{
+		"Content":        content,
+		"CurrentService": service,
+		"CurrentLines":   lines,
 	})
 }
 
@@ -351,11 +413,11 @@ func (h *Handler) UpdateUser(c *gin.Context) {
 	// SubPath   — subscription URL key, must never change after creation
 	// TrafficUsed / TrafficReset — managed by traffic sync, not the edit form
 	// CreatedAt  — immutable
-	user.ID           = existingUser.ID
-	user.SubPath      = existingUser.SubPath
-	user.TrafficUsed  = existingUser.TrafficUsed
+	user.ID = existingUser.ID
+	user.SubPath = existingUser.SubPath
+	user.TrafficUsed = existingUser.TrafficUsed
 	user.TrafficReset = existingUser.TrafficReset
-	user.CreatedAt    = existingUser.CreatedAt
+	user.CreatedAt = existingUser.CreatedAt
 	if err := h.db.Save(&user).Error; err != nil {
 		logger.Error("Failed to update user %s: %v", id, err)
 		c.String(http.StatusInternalServerError, "Error updating user: "+err.Error())
@@ -795,7 +857,7 @@ func (h *Handler) DomainsTable(c *gin.Context) {
 			Domain:  d,
 			HasCert: false,
 		}
-		
+
 		if d.CertPath != "" {
 			if expiry, err := utils.ParseCertificateExpiry(d.CertPath); err == nil {
 				view.HasCert = true
@@ -1150,8 +1212,8 @@ func (h *Handler) UpdateOutbound(c *gin.Context) {
 	}
 
 	// Preserve immutable / non-form fields
-	outbound.ID        = existing.ID
-	outbound.Enabled   = existing.Enabled
+	outbound.ID = existing.ID
+	outbound.Enabled = existing.Enabled
 	outbound.CreatedAt = existing.CreatedAt
 	outbound.UpdatedAt = time.Now()
 
@@ -1272,8 +1334,8 @@ func (h *Handler) UpdateRouting(c *gin.Context) {
 		c.String(http.StatusNotFound, "Routing rule not found")
 		return
 	}
-	rule.ID        = existing.ID
-	rule.Enabled   = existing.Enabled   // Preserve enabled status
+	rule.ID = existing.ID
+	rule.Enabled = existing.Enabled     // Preserve enabled status
 	rule.CreatedAt = existing.CreatedAt // Preserve creation timestamp
 	if err := h.db.Save(&rule).Error; err != nil {
 		c.String(http.StatusInternalServerError, "Error updating routing rule")
@@ -1347,4 +1409,332 @@ func (h *Handler) generateNginxConfigForInbound(inbound *models.Inbound) error {
 	}
 
 	return nil
+}
+
+// ============ WireGuard Handlers ============
+
+type WGPeerItem struct {
+	models.WGPeer
+	Runtime wireguard.PeerRuntimeStats
+}
+
+func (h *Handler) WGPeersTable(c *gin.Context) {
+	var peers []models.WGPeer
+	if err := h.db.Order("id ASC").Find(&peers).Error; err != nil {
+		c.String(http.StatusInternalServerError, "Error loading WireGuard peers")
+		return
+	}
+
+	mgr := wireguard.NewManager(h.db)
+	stats, _ := mgr.GetPeerRuntimeStats()
+
+	items := make([]WGPeerItem, len(peers))
+	for i, p := range peers {
+		items[i].WGPeer = p
+		if st, ok := stats[p.PublicKey]; ok {
+			items[i].Runtime = st
+		} else {
+			items[i].Runtime = wireguard.PeerRuntimeStats{
+				HandshakeAgo:    "未连接",
+				TransferRxHuman: "0 B",
+				TransferTxHuman: "0 B",
+				IsOnline:        false,
+			}
+		}
+	}
+
+	c.HTML(http.StatusOK, "components/wg-peers-table.html", gin.H{
+		"Peers": items,
+	})
+}
+
+func (h *Handler) WGServerForm(c *gin.Context) {
+	serverCfg, err := models.GetWGServerConfig(h.db)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to load WireGuard server config")
+		return
+	}
+	c.HTML(http.StatusOK, "components/wg-server-form.html", gin.H{
+		"Server": serverCfg,
+	})
+}
+
+func (h *Handler) WGPeerForm(c *gin.Context) {
+	serverCfg, err := models.GetWGServerConfig(h.db)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to load WireGuard server config")
+		return
+	}
+
+	id := c.Param("id")
+	if id != "" && id != "new" {
+		var peer models.WGPeer
+		if err := h.db.First(&peer, "id = ?", id).Error; err != nil {
+			c.String(http.StatusNotFound, "Peer not found")
+			return
+		}
+		c.HTML(http.StatusOK, "components/wg-peer-form.html", gin.H{
+			"Peer":   peer,
+			"Server": serverCfg,
+		})
+		return
+	}
+
+	// New peer: suggest next available IP
+	nextIP := models.GetNextAvailableIP(h.db, serverCfg.Address)
+	c.HTML(http.StatusOK, "components/wg-peer-form.html", gin.H{
+		"Peer":   nil,
+		"NextIP": nextIP,
+		"Server": serverCfg,
+	})
+}
+
+func (h *Handler) WGPeerConfigModal(c *gin.Context) {
+	id := c.Param("id")
+	var peer models.WGPeer
+	if err := h.db.First(&peer, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Peer not found")
+		return
+	}
+
+	serverCfg, err := models.GetWGServerConfig(h.db)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to load server config")
+		return
+	}
+
+	host := c.GetHeader("X-Forwarded-Host")
+	if host == "" {
+		host = c.Request.Host
+	}
+	serverHost := wireguard.CleanHost(host)
+
+	mgr := wireguard.NewManager(h.db)
+	wgConf := mgr.GenerateClientWGConfig(serverCfg, &peer, serverHost)
+	xrayJSON, _ := mgr.GenerateClientXrayJSON(serverCfg, &peer, serverHost)
+
+	c.HTML(http.StatusOK, "components/wg-peer-config-modal.html", gin.H{
+		"Peer":       peer,
+		"Server":     serverCfg,
+		"ServerHost": serverHost,
+		"WGConf":     wgConf,
+		"XrayJSON":   xrayJSON,
+	})
+}
+
+func (h *Handler) CreateWGPeer(c *gin.Context) {
+	serverCfg, err := models.GetWGServerConfig(h.db)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to load server config")
+		return
+	}
+
+	name := strings.TrimSpace(c.PostForm("name"))
+	if name == "" {
+		c.String(http.StatusBadRequest, "客户端名称不能为空")
+		return
+	}
+
+	pubKey := strings.TrimSpace(c.PostForm("public_key"))
+	privKey := strings.TrimSpace(c.PostForm("private_key"))
+	if pubKey == "" && privKey != "" {
+		derived, err := models.DeriveWGPublicKey(privKey)
+		if err == nil {
+			pubKey = derived
+		}
+	}
+	if pubKey == "" {
+		c.String(http.StatusBadRequest, "客户端公钥不能为空")
+		return
+	}
+
+	allowedIPs := strings.TrimSpace(c.PostForm("allowed_ips"))
+	if allowedIPs == "" {
+		allowedIPs = models.GetNextAvailableIP(h.db, serverCfg.Address)
+	}
+
+	keepalive, _ := strconv.Atoi(c.PostForm("persistent_keepalive"))
+	if keepalive <= 0 {
+		keepalive = 25
+	}
+
+	peer := models.WGPeer{
+		Name:                name,
+		PublicKey:           pubKey,
+		PrivateKey:          privKey,
+		PresharedKey:        strings.TrimSpace(c.PostForm("preshared_key")),
+		AllowedIPs:          allowedIPs,
+		Endpoint:            strings.TrimSpace(c.PostForm("endpoint")),
+		PersistentKeepalive: keepalive,
+		Enabled:             true,
+	}
+
+	if err := h.db.Create(&peer).Error; err != nil {
+		c.String(http.StatusInternalServerError, "创建客户端失败: "+err.Error())
+		return
+	}
+
+	mgr := wireguard.NewManager(h.db)
+	if err := mgr.SyncConfig(false); err != nil {
+		logger.Warn("WireGuard config sync failed: %v", err)
+	}
+
+	h.WGPeersTable(c)
+}
+
+func (h *Handler) UpdateWGPeer(c *gin.Context) {
+	id := c.Param("id")
+	var peer models.WGPeer
+	if err := h.db.First(&peer, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Peer not found")
+		return
+	}
+
+	name := strings.TrimSpace(c.PostForm("name"))
+	if name != "" {
+		peer.Name = name
+	}
+
+	pubKey := strings.TrimSpace(c.PostForm("public_key"))
+	privKey := strings.TrimSpace(c.PostForm("private_key"))
+	if pubKey == "" && privKey != "" {
+		derived, err := models.DeriveWGPublicKey(privKey)
+		if err == nil {
+			pubKey = derived
+		}
+	}
+	if pubKey != "" {
+		peer.PublicKey = pubKey
+	}
+	if privKey != "" {
+		peer.PrivateKey = privKey
+	}
+
+	allowedIPs := strings.TrimSpace(c.PostForm("allowed_ips"))
+	if allowedIPs != "" {
+		peer.AllowedIPs = allowedIPs
+	}
+
+	peer.PresharedKey = strings.TrimSpace(c.PostForm("preshared_key"))
+	peer.Endpoint = strings.TrimSpace(c.PostForm("endpoint"))
+
+	if kaStr := c.PostForm("persistent_keepalive"); kaStr != "" {
+		if ka, err := strconv.Atoi(kaStr); err == nil {
+			peer.PersistentKeepalive = ka
+		}
+	}
+
+	if err := h.db.Save(&peer).Error; err != nil {
+		c.String(http.StatusInternalServerError, "更新客户端失败: "+err.Error())
+		return
+	}
+
+	mgr := wireguard.NewManager(h.db)
+	if err := mgr.SyncConfig(false); err != nil {
+		logger.Warn("WireGuard config sync failed: %v", err)
+	}
+
+	h.WGPeersTable(c)
+}
+
+func (h *Handler) ToggleWGPeer(c *gin.Context) {
+	id := c.Param("id")
+	var peer models.WGPeer
+	if err := h.db.First(&peer, "id = ?", id).Error; err != nil {
+		c.String(http.StatusNotFound, "Peer not found")
+		return
+	}
+
+	peer.Enabled = !peer.Enabled
+	if err := h.db.Save(&peer).Error; err != nil {
+		c.String(http.StatusInternalServerError, "更新状态失败")
+		return
+	}
+
+	mgr := wireguard.NewManager(h.db)
+	if err := mgr.SyncConfig(false); err != nil {
+		logger.Warn("WireGuard config sync failed: %v", err)
+	}
+
+	h.WGPeersTable(c)
+}
+
+func (h *Handler) DeleteWGPeer(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.db.Delete(&models.WGPeer{}, "id = ?", id).Error; err != nil {
+		c.String(http.StatusInternalServerError, "删除客户端失败")
+		return
+	}
+
+	mgr := wireguard.NewManager(h.db)
+	if err := mgr.SyncConfig(false); err != nil {
+		logger.Warn("WireGuard config sync failed: %v", err)
+	}
+
+	h.WGPeersTable(c)
+}
+
+func (h *Handler) UpdateWGServer(c *gin.Context) {
+	serverCfg, err := models.GetWGServerConfig(h.db)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to load server config")
+		return
+	}
+
+	oldPort := serverCfg.ListenPort
+	newPortStr := c.PostForm("listen_port")
+	newPort := models.ParsePort(newPortStr, oldPort)
+
+	// Validate port range
+	if newPort < 1024 || newPort > 65535 {
+		c.String(http.StatusBadRequest, "端口范围必须在 1024 - 65535 之间")
+		return
+	}
+
+	// Check port conflict with Xray inbounds
+	if conflict, tag := wireguard.CheckPortConflict(h.db, newPort); conflict {
+		c.String(http.StatusBadRequest, fmt.Sprintf("端口 %d 与 Xray 入站 [%s] 冲突，请更换端口或先停用该入站", newPort, tag))
+		return
+	}
+
+	if addr := strings.TrimSpace(c.PostForm("address")); addr != "" {
+		serverCfg.Address = addr
+	}
+	if mtuStr := c.PostForm("mtu"); mtuStr != "" {
+		if mtu, err := strconv.Atoi(mtuStr); err == nil && mtu > 0 {
+			serverCfg.MTU = mtu
+		}
+	}
+
+	serverCfg.ListenPort = newPort
+
+	if privKey := strings.TrimSpace(c.PostForm("private_key")); privKey != "" {
+		serverCfg.PrivateKey = privKey
+		pubKey, err := models.DeriveWGPublicKey(privKey)
+		if err == nil {
+			serverCfg.PublicKey = pubKey
+		}
+	}
+
+	if postUp := c.PostForm("post_up"); postUp != "" {
+		serverCfg.PostUp = strings.TrimSpace(postUp)
+	}
+	if postDown := c.PostForm("post_down"); postDown != "" {
+		serverCfg.PostDown = strings.TrimSpace(postDown)
+	}
+
+	serverCfg.UpdatedAt = time.Now()
+	if err := h.db.Save(serverCfg).Error; err != nil {
+		c.String(http.StatusInternalServerError, "保存服务端配置失败: "+err.Error())
+		return
+	}
+
+	mgr := wireguard.NewManager(h.db)
+	portChanged := oldPort != newPort
+	if err := mgr.SyncConfig(portChanged); err != nil {
+		logger.Warn("WireGuard config sync failed: %v", err)
+	}
+
+	c.Header("HX-Refresh", "true")
+	c.String(http.StatusOK, "配置已保存")
 }

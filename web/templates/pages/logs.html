@@ -1,0 +1,379 @@
+{{define "logs"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Xray Panel</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/lucide.min.js"></script>
+    <style>
+        .log-terminal-wrapper {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .log-terminal-header {
+            background: #161b22;
+            padding: 0.6rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #30363d;
+            font-size: 0.85rem;
+        }
+        .log-dots {
+            display: flex;
+            gap: 6px;
+        }
+        .log-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .log-dot-red { background: #ff5f56; }
+        .log-dot-yellow { background: #ffbd2e; }
+        .log-dot-green { background: #27c93f; }
+        .log-body {
+            padding: 1rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+            background: #0d1117;
+            height: 600px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .service-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .service-tab-btn {
+            padding: 0.45rem 0.9rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s;
+        }
+        .service-tab-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+        .service-tab-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #27c93f;
+            box-shadow: 0 0 8px #27c93f;
+            animation: pulse-green 2s infinite;
+        }
+        @keyframes pulse-green {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+
+<body>
+    {{template "nav" .}}
+
+    <div class="content">
+        {{template "logs-content" .}}
+    </div>
+
+    <div id="notifications"></div>
+
+    <script src="/static/js/app.min.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>
+{{end}}
+
+{{define "logs-content"}}
+<div class="content-page">
+    <div class="page-header">
+        <div>
+            <h1>系统日志查看</h1>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+                实时查看 Xray、面板、WireGuard 与 Nginx 运行日志，用于连接诊断与排错
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button class="btn btn-outline btn-sm" onclick="copyLogContent()">
+                <i data-lucide="copy" style="width: 14px; height: 14px;"></i> 复制日志
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="downloadLogFile()">
+                <i data-lucide="download" style="width: 14px; height: 14px;"></i> 下载日志
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="refreshLogs()">
+                <i data-lucide="rotate-cw" style="width: 14px; height: 14px;"></i> 立即刷新
+            </button>
+        </div>
+    </div>
+
+    <!-- 服务切换选项卡 -->
+    <div class="service-tabs">
+        <button type="button" class="service-tab-btn active" id="tab-xray" onclick="switchService('xray')">
+            <i data-lucide="zap" style="width: 15px; height: 15px;"></i> Xray-core 日志
+        </button>
+        <button type="button" class="service-tab-btn" id="tab-panel" onclick="switchService('panel')">
+            <i data-lucide="layout-dashboard" style="width: 15px; height: 15px;"></i> 面板服务日志
+        </button>
+        <button type="button" class="service-tab-btn" id="tab-wireguard" onclick="switchService('wireguard')">
+            <i data-lucide="shield" style="width: 15px; height: 15px;"></i> WireGuard 日志
+        </button>
+        <button type="button" class="service-tab-btn" id="tab-nginx" onclick="switchService('nginx')">
+            <i data-lucide="globe" style="width: 15px; height: 15px;"></i> Nginx 日志
+        </button>
+    </div>
+
+    <!-- 过滤器与控制栏 -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; background: var(--card-bg); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 260px;">
+            <div style="position: relative; flex: 1;">
+                <input type="text" id="log-search" placeholder="🔍 实时过滤关键字 (如 error, reject, 10.0.0...)"
+                    oninput="filterLogs()" style="width: 100%; padding-left: 0.75rem; font-size: 0.85rem;">
+            </div>
+            <button class="btn btn-sm btn-outline" onclick="clearFilter()" style="padding: 0.35rem 0.6rem;">清空搜索</button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem;">
+                <label for="log-lines" style="color: var(--text-secondary); margin: 0;">行数:</label>
+                <select id="log-lines" onchange="changeLines(this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.85rem; border-radius: 4px;">
+                    <option value="50">50 行</option>
+                    <option value="100" selected>100 行</option>
+                    <option value="200">200 行</option>
+                    <option value="500">500 行</option>
+                    <option value="1000">1000 行</option>
+                </select>
+            </div>
+
+            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.85rem; user-select: none; margin: 0;">
+                <input type="checkbox" id="auto-refresh-toggle" onchange="toggleAutoRefresh(this.checked)" checked style="cursor: pointer;">
+                <span>自动刷新 (3s)</span>
+                <span id="live-dot" class="live-indicator"></span>
+            </label>
+
+            <button class="btn btn-sm" onclick="scrollToBottom()" style="padding: 0.25rem 0.5rem;" title="滚到最底部">
+                <i data-lucide="arrow-down" style="width: 14px; height: 14px;"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 终端窗口 -->
+    <div class="log-terminal-wrapper">
+        <div class="log-terminal-header">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div class="log-dots">
+                    <span class="log-dot log-dot-red"></span>
+                    <span class="log-dot log-dot-yellow"></span>
+                    <span class="log-dot log-dot-green"></span>
+                </div>
+                <span id="terminal-service-label" style="font-weight: 600; color: #58a6ff;">xray.service</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: #8b949e;">
+                <span id="log-stat-count">读取中...</span>
+                <span>•</span>
+                <span id="log-last-updated">刚刚更新</span>
+            </div>
+        </div>
+
+        <div id="log-body" class="log-body">
+            <div id="log-output-container"
+                hx-get="/api/logs/content?service=xray&lines=100"
+                hx-trigger="load"
+                hx-swap="innerHTML">
+                <div style="color: #8b949e; text-align: center; padding: 3rem;">正在加载日志流...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentService = 'xray';
+let currentLines = 100;
+let autoRefreshTimer = null;
+let rawLogLines = [];
+
+function switchService(service) {
+    currentService = service;
+    document.querySelectorAll('.service-tab-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('tab-' + service);
+    if (btn) btn.classList.add('active');
+
+    const label = document.getElementById('terminal-service-label');
+    if (service === 'xray') label.textContent = 'xray.service (Xray-core)';
+    else if (service === 'panel') label.textContent = 'xray-panel.service (Xray Panel)';
+    else if (service === 'wireguard') label.textContent = 'wg-quick@wg0.service (WireGuard)';
+    else if (service === 'nginx') label.textContent = 'nginx.service (Nginx 反代)';
+
+    refreshLogs();
+}
+
+function changeLines(lines) {
+    currentLines = parseInt(lines, 10) || 100;
+    refreshLogs();
+}
+
+function refreshLogs() {
+    const url = `/api/logs/content?service=${currentService}&lines=${currentLines}`;
+    htmx.ajax('GET', url, { target: '#log-output-container', swap: 'innerHTML' });
+}
+
+function toggleAutoRefresh(enabled) {
+    const dot = document.getElementById('live-dot');
+    if (enabled) {
+        dot.style.display = 'inline-block';
+        if (!autoRefreshTimer) {
+            autoRefreshTimer = setInterval(refreshLogs, 3000);
+        }
+    } else {
+        dot.style.display = 'none';
+        if (autoRefreshTimer) {
+            clearInterval(autoRefreshTimer);
+            autoRefreshTimer = null;
+        }
+    }
+}
+
+// Start auto-refresh timer by default
+autoRefreshTimer = setInterval(refreshLogs, 3000);
+
+document.body.addEventListener('htmx:afterSwap', function (evt) {
+    if (evt.detail.target && evt.detail.target.id === 'log-output-container') {
+        document.getElementById('log-last-updated').textContent = new Date().toLocaleTimeString();
+        cacheAndFilterLogs();
+    }
+});
+
+function cacheAndFilterLogs() {
+    const logContainer = document.getElementById('log-output-container');
+    const rawPre = logContainer.querySelector('pre');
+    if (rawPre) {
+        rawLogLines = rawPre.innerText.split('\n');
+    } else {
+        rawLogLines = logContainer.innerText.split('\n');
+    }
+    filterLogs();
+}
+
+function filterLogs() {
+    const query = (document.getElementById('log-search').value || '').trim().toLowerCase();
+    const body = document.getElementById('log-body');
+    const logContainer = document.getElementById('log-output-container');
+
+    if (!rawLogLines || rawLogLines.length === 0) {
+        return;
+    }
+
+    let matched = 0;
+    let html = '';
+
+    for (let line of rawLogLines) {
+        if (!line.trim()) continue;
+        if (query && !line.toLowerCase().includes(query)) {
+            continue;
+        }
+        matched++;
+
+        let highlighted = escapeHtml(line);
+        // Highlight keywords
+        if (line.includes('[ERROR]') || line.toLowerCase().includes('error') || line.includes('failed')) {
+            highlighted = `<span style="color: #f85149; font-weight: bold;">${highlighted}</span>`;
+        } else if (line.includes('[WARN]') || line.toLowerCase().includes('warning') || line.includes('warn')) {
+            highlighted = `<span style="color: #d29922;">${highlighted}</span>`;
+        } else if (line.includes('[INFO]')) {
+            highlighted = `<span style="color: #58a6ff;">${highlighted}</span>`;
+        } else if (line.includes('[DEBUG]')) {
+            highlighted = `<span style="color: #8b949e;">${highlighted}</span>`;
+        } else if (line.includes('accepted') || line.includes('success')) {
+            highlighted = `<span style="color: #3fb950;">${highlighted}</span>`;
+        }
+
+        if (query) {
+            const re = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+            highlighted = highlighted.replace(re, '<mark style="background: rgba(245,158,11,0.35); color: #fff; padding: 0 2px; border-radius: 2px;">$1</mark>');
+        }
+
+        html += `<div>${highlighted}</div>`;
+    }
+
+    document.getElementById('log-stat-count').textContent = `共显示 ${matched} 行`;
+
+    if (matched === 0) {
+        logContainer.innerHTML = `<div style="color: #8b949e; text-align: center; padding: 2rem;">没有匹配到关键词 "${escapeHtml(query)}" 的日志记录</div>`;
+    } else {
+        logContainer.innerHTML = `<div style="font-family: monospace;">${html}</div>`;
+    }
+}
+
+function clearFilter() {
+    document.getElementById('log-search').value = '';
+    filterLogs();
+}
+
+function scrollToBottom() {
+    const el = document.getElementById('log-body');
+    el.scrollTop = el.scrollHeight;
+}
+
+function copyLogContent() {
+    const text = rawLogLines.join('\n');
+    navigator.clipboard.writeText(text).then(function() {
+        showNotification('全部日志已复制到剪贴板', 'success');
+    }, function() {
+        showNotification('复制失败', 'error');
+    });
+}
+
+function downloadLogFile() {
+    const text = rawLogLines.join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentService}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.log`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showNotification('日志下载已开始', 'success');
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+</script>
+{{end}}
+

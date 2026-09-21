@@ -81,6 +81,8 @@ func LoadTemplates(templateFS fs.FS) (*template.Template, error) {
 		"templates/pages/routing.html",
 		"templates/pages/domains.html",
 		"templates/pages/settings.html",
+		"templates/pages/wireguard.html",
+		"templates/pages/logs.html",
 	}
 	for _, page := range pages {
 		if err := loadTemplate(tmpl, templateFS, page); err != nil {
@@ -104,6 +106,11 @@ func LoadTemplates(templateFS fs.FS) (*template.Template, error) {
 		"templates/components/wg-client-config.html",
 		"templates/components/import-outbound-form.html",
 		"templates/components/certificates-scan-result.html",
+		"templates/components/wg-peers-table.html",
+		"templates/components/wg-peer-form.html",
+		"templates/components/wg-server-form.html",
+		"templates/components/wg-peer-config-modal.html",
+		"templates/components/logs-terminal.html",
 	}
 	for _, comp := range components {
 		if err := loadTemplate(tmpl, templateFS, comp); err != nil {

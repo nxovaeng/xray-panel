@@ -43,11 +43,21 @@
                 <i data-lucide="globe"></i> 域名管理
             </a>
         </li>
+        <li>
+            <a href="/wireguard" class="{{if eq .Page "wireguard"}}active{{end}}">
+                <i data-lucide="shield"></i> WireGuard
+            </a>
+        </li>
         {{end}}
 
         <li>
             <a href="/settings" class="{{if eq .Page "settings"}}active{{end}}">
                 <i data-lucide="settings"></i> 应用配置
+            </a>
+        </li>
+        <li>
+            <a href="/logs" class="{{if eq .Page "logs"}}active{{end}}">
+                <i data-lucide="file-text"></i> 系统日志
             </a>
         </li>
     </ul>

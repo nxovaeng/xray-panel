@@ -164,6 +164,8 @@ func (s *Server) setupRoutes() {
 		pages.GET("/routing", s.webHandler.RoutingPage)
 		pages.GET("/domains", s.webHandler.DomainsPage)
 		pages.GET("/settings", s.webHandler.SettingsPage)
+		pages.GET("/wireguard", s.webHandler.WireGuardPage)
+		pages.GET("/logs", s.webHandler.LogsPage)
 	}
 
 	// Form routes (return HTML forms)
@@ -191,6 +193,12 @@ func (s *Server) setupRoutes() {
 		// Domain forms
 		forms.GET("/domains/new", s.webHandler.NewDomainForm)
 		forms.GET("/domains/:id/edit", s.webHandler.EditDomainForm)
+
+		// WireGuard forms
+		forms.GET("/wireguard/server/edit", s.webHandler.WGServerForm)
+		forms.GET("/wireguard/peers/new", s.webHandler.WGPeerForm)
+		forms.GET("/wireguard/peers/:id/edit", s.webHandler.WGPeerForm)
+		forms.GET("/wireguard/peers/:id/config", s.webHandler.WGPeerConfigModal)
 	}
 
 	// API routes - public (no auth required)
@@ -270,6 +278,22 @@ func (s *Server) setupRoutes() {
 
 		// Panel control
 		api.POST("/panel/restart", s.handlePanelRestart)
+
+		// WireGuard
+		api.GET("/wireguard/status", s.handleWGStatus)
+		api.POST("/wireguard/service/:action", s.handleWGServiceAction)
+		api.POST("/wireguard/setup-env", s.handleWGSetupEnv)
+		api.GET("/wireguard/server", s.handleGetWGServer)
+		api.POST("/wireguard/server", s.webHandler.UpdateWGServer)
+		api.POST("/wireguard/generate-keys", s.handleGenerateWGKeys)
+		api.GET("/wireguard/peers/table", s.webHandler.WGPeersTable)
+		api.POST("/wireguard/peers", s.webHandler.CreateWGPeer)
+		api.POST("/wireguard/peers/:id", s.webHandler.UpdateWGPeer)
+		api.POST("/wireguard/peers/:id/toggle", s.webHandler.ToggleWGPeer)
+		api.DELETE("/wireguard/peers/:id", s.webHandler.DeleteWGPeer)
+
+		// System Logs
+		api.GET("/logs/content", s.webHandler.LogsContent)
 	}
 
 	// Subscription routes (public, rate-limited)

@@ -1,0 +1,109 @@
+{{define "components/wg-peers-table.html"}}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>客户端名称</th>
+            <th>分配内网 IP</th>
+            <th>公钥</th>
+            <th>连接状态</th>
+            <th>实时流量 (下行/上行)</th>
+            <th>最近握手</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{if eq (len .Peers) 0}}
+        <tr>
+            <td colspan="7" style="text-align: center; padding: 2.5rem; color: var(--text-secondary);">
+                暂无客户端。点击右上角「添加客户端」开始添加对端 VPS 或节点。
+            </td>
+        </tr>
+        {{else}}
+            {{range .Peers}}
+            <tr id="peer-{{.ID}}" {{if not .Enabled}}style="opacity: 0.55;"{{end}}>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i data-lucide="server" style="width: 16px; height: 16px; color: var(--accent);"></i>
+                        <strong>{{.Name}}</strong>
+                    </div>
+                </td>
+                <td>
+                    <code style="font-size: 0.85rem; color: var(--accent); border-color: rgba(99, 102, 241, 0.2);">{{.AllowedIPs}}</code>
+                </td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                        <code style="font-size: 0.78rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{.PublicKey}}">{{.PublicKey}}</code>
+                        <button class="btn btn-sm" style="padding: 1px 4px; font-size: 0.7rem;" onclick="copyText('{{.PublicKey}}')" title="复制公钥">
+                            <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
+                        </button>
+                    </div>
+                </td>
+                <td>
+                    {{if not .Enabled}}
+                        <span class="badge badge-secondary">已禁用</span>
+                    {{else if .Runtime.IsOnline}}
+                        <span class="badge badge-success"><span style="display:inline-block;width:6px;height:6px;background:var(--success);border-radius:50%;margin-right:4px;"></span>在线</span>
+                    {{else}}
+                        <span class="badge badge-secondary">离线</span>
+                    {{end}}
+                </td>
+                <td>
+                    <div style="font-size: 0.85rem; font-family: monospace;">
+                        <span style="color: var(--success);" title="接收自对端">↓ {{.Runtime.TransferRxHuman}}</span>
+                        <span style="color: var(--text-secondary); margin: 0 4px;">/</span>
+                        <span style="color: var(--accent);" title="发送至对端">↑ {{.Runtime.TransferTxHuman}}</span>
+                    </div>
+                </td>
+                <td>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                        {{if .Runtime.IsOnline}}
+                            <span style="color: var(--success);">{{.Runtime.HandshakeAgo}}</span>
+                        {{else}}
+                            {{.Runtime.HandshakeAgo}}
+                        {{end}}
+                    </span>
+                </td>
+                <td>
+                    <div style="display: flex; gap: 0.4rem;">
+                        <button class="btn btn-sm btn-outline"
+                            hx-get="/wireguard/peers/{{.ID}}/config"
+                            hx-target="#modal-body"
+                            onclick="openModal('客户端配置 ({{.Name}})')"
+                            title="查看/复制客户端配置 (含 Xray 出站与 wg0.conf)">
+                            <i data-lucide="file-text" style="width: 15px; height: 15px;"></i> 配置
+                        </button>
+
+                        <button class="btn btn-sm btn-outline"
+                            style="{{if .Enabled}}color: var(--success); border-color: rgba(34,197,94,0.3);{{else}}color: var(--danger); border-color: rgba(239,68,68,0.3);{{end}}"
+                            hx-post="/api/wireguard/peers/{{.ID}}/toggle"
+                            hx-target="#wg-peers-table"
+                            hx-swap="innerHTML"
+                            title="{{if .Enabled}}点击禁用此客户端{{else}}点击启用此客户端{{end}}">
+                            <i data-lucide="{{if .Enabled}}check-circle{{else}}x-circle{{end}}" style="width: 15px; height: 15px;"></i>
+                        </button>
+
+                        <button class="btn btn-sm btn-outline"
+                            hx-get="/wireguard/peers/{{.ID}}/edit"
+                            hx-target="#modal-body"
+                            onclick="openModal('编辑客户端 - {{.Name}}')"
+                            title="编辑客户端">
+                            <i data-lucide="edit" style="width: 15px; height: 15px;"></i>
+                        </button>
+
+                        <button class="btn btn-sm btn-outline" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);"
+                            hx-delete="/api/wireguard/peers/{{.ID}}"
+                            hx-target="#wg-peers-table"
+                            hx-swap="innerHTML"
+                            hx-confirm="确定要删除客户端「{{.Name}}」吗？"
+                            title="删除客户端">
+                            <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {{end}}
+        {{end}}
+    </tbody>
+</table>
+{{end}}
+

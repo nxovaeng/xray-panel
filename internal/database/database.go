@@ -45,7 +45,9 @@ func Migrate(db *gorm.DB) error {
 		&models.Outbound{},
 		&models.RoutingRule{},
 		&models.NginxConfig{},
-		&models.Setting{})
+		&models.Setting{},
+		&models.WGServerConfig{},
+		&models.WGPeer{})
 }
 
 // Seed creates default admin and settings if they don't exist
@@ -113,6 +115,11 @@ func Seed(db *gorm.DB, cfg *config.Config) error {
 		for _, r := range models.DefaultRoutingRules() {
 			db.Create(&r)
 		}
+	}
+
+	// 4. Default WireGuard server configuration
+	if _, err := models.GetWGServerConfig(db); err != nil {
+		applogger.Error("Failed to initialize default WireGuard server configuration: %v", err)
 	}
 
 	return nil

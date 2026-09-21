@@ -1,0 +1,330 @@
+{{define "wireguard"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Xray Panel</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/lucide.min.js"></script>
+</head>
+
+<body>
+    {{template "nav" .}}
+
+    <div class="content">
+        {{template "wireguard-content" .}}
+    </div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content" style="max-width: 680px;">
+            <div class="modal-header">
+                <h2 id="modal-title"></h2>
+                <button class="modal-close" onclick="closeModal()">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="notifications"></div>
+
+    <script src="/static/js/app.min.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>
+{{end}}
+
+{{define "wireguard-content"}}
+<div class="content-page">
+    <div class="page-header">
+        <div>
+            <h1>WireGuard 管理</h1>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+                基于 Linux 内核级 WireGuard 独立系统服务，用于 VPS 间高速互联及多节点组网
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.75rem;">
+            <button hx-get="/wireguard/server/edit" hx-target="#modal-body" onclick="openModal('服务端配置 (监听端口/网段/密钥)')" class="btn btn-outline" style="border-color: rgba(99, 102, 241, 0.4); color: var(--accent);">
+                <i data-lucide="sliders" style="width: 16px; height: 16px;"></i> 服务端设置
+            </button>
+            <button hx-get="/wireguard/peers/new" hx-target="#modal-body" onclick="openModal('添加客户端 (Peer)')" class="btn btn-primary">
+                <i data-lucide="plus" style="width: 16px; height: 16px;"></i> 添加客户端
+            </button>
+        </div>
+    </div>
+
+    {{if .Status.PortConflict}}
+    <div style="padding: 0.75rem 1rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #fca5a5; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+        <i data-lucide="alert-triangle" style="width: 18px; height: 18px; flex-shrink: 0; color: var(--danger);"></i>
+        <div>
+            <strong>端口冲突警告：</strong> 当前 WireGuard 监听端口 <code>{{.ServerCfg.ListenPort}}</code> 与 Xray 入站 <code>[{{.Status.ConflictInbound}}]</code> 冲突！
+            请点击「服务端设置」更换监听端口，或前往「入站配置」停用冲突入站。
+        </div>
+    </div>
+    {{end}}
+
+    <!-- 环境初始化与内核转发配置卡片（未就绪时展示） -->
+    {{if and .Status.IsLinux (or (not .Status.IsInstalled) (not .Status.IPv4Forwarding) (not .Status.IPv6Forwarding))}}
+    <div style="background: rgba(99, 102, 241, 0.07); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent);">
+                    <i data-lucide="wrench" style="width: 20px; height: 20px;"></i>
+                </div>
+                <div>
+                    <strong style="font-size: 1.05rem; display: block;">WireGuard 系统环境与内核转发准备</strong>
+                    <span style="font-size: 0.82rem; color: var(--text-secondary);">作为 VPS 互联出站网关，需要安装 <code>wireguard-tools</code> 工具包并开启 Linux 内核 IPv4 与 IPv6 转发</span>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-primary btn-sm" id="btn-setup-env" onclick="runSetupEnv()" style="box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);">
+                    <i data-lucide="zap" style="width: 14px; height: 14px;"></i> ⚡ 一键自动配置环境
+                </button>
+            </div>
+        </div>
+
+        <!-- 状态项徽标 -->
+        <div style="display: flex; gap: 1.25rem; flex-wrap: wrap; margin-bottom: 0.85rem; font-size: 0.85rem; background: rgba(0,0,0,0.15); padding: 0.6rem 0.9rem; border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+                <span style="color: var(--text-secondary);">WireGuard 依赖包:</span>
+                {{if .Status.IsInstalled}}
+                    <span class="badge badge-success">✓ 已安装 (wireguard-tools)</span>
+                {{else}}
+                    <span class="badge badge-danger">✗ 待安装</span>
+                {{end}}
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+                <span style="color: var(--text-secondary);">IPv4 转发:</span>
+                {{if .Status.IPv4Forwarding}}
+                    <span class="badge badge-success">✓ 已开启 (net.ipv4.ip_forward)</span>
+                {{else}}
+                    <span class="badge badge-warning">✗ 未开启</span>
+                {{end}}
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.35rem;">
+                <span style="color: var(--text-secondary);">IPv6 转发:</span>
+                {{if .Status.IPv6Forwarding}}
+                    <span class="badge badge-success">✓ 已开启 (net.ipv6.conf.all.forwarding)</span>
+                {{else}}
+                    <span class="badge badge-warning">✗ 未开启</span>
+                {{end}}
+            </div>
+        </div>
+
+        <!-- 可折叠手动安装与配置命令 -->
+        <details style="background: rgba(0, 0, 0, 0.22); border-radius: 8px; padding: 0.65rem 1rem; font-size: 0.82rem; border: 1px solid rgba(255,255,255,0.06);">
+            <summary style="cursor: pointer; color: var(--accent); font-weight: 500; outline: none; display: flex; align-items: center; gap: 0.4rem;">
+                <i data-lucide="terminal" style="width: 14px; height: 14px;"></i> 查看终端手动执行命令（点击展开复制）
+            </summary>
+            <div style="margin-top: 0.75rem;">
+                <p style="margin: 0 0 0.4rem 0; color: var(--text-secondary);">若服务器网络环境特殊或偏好在终端操作，请在服务器 SSH 终端中粘贴执行：</p>
+                <div style="position: relative;">
+                    <pre id="manual-setup-cmd" style="background: #0d1117; padding: 0.75rem; border-radius: 6px; border: 1px solid #30363d; overflow-x: auto; font-family: monospace; font-size: 0.8rem; line-height: 1.5; margin: 0; color: #c9d1d9;"># 1. 开启并持久化 IPv4 与 IPv6 转发
+echo -e "net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\nnet.ipv6.conf.default.forwarding = 1" > /etc/sysctl.d/99-wireguard.conf
+sysctl --system
+
+# 2. 安装 WireGuard 工具 (Debian / Ubuntu)
+apt update && apt install -y wireguard-tools
+
+# 或 CentOS / Rocky / AlmaLinux / Fedora:
+# dnf install -y epel-release wireguard-tools</pre>
+                    <button class="btn btn-sm btn-outline" style="position: absolute; top: 0.4rem; right: 0.4rem; padding: 2px 8px; font-size: 0.75rem;" onclick="copyManualCmd()">
+                        <i data-lucide="copy" style="width: 12px; height: 12px;"></i> 复制命令
+                    </button>
+                </div>
+            </div>
+        </details>
+    </div>
+    {{end}}
+
+    <!-- 服务端状态卡片 -->
+    <div class="stat-card" style="margin-bottom: 1.5rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div style="width: 40px; height: 40px; border-radius: 8px; background: rgba(99, 102, 241, 0.12); display: flex; align-items: center; justify-content: center; color: var(--accent);">
+                    <i data-lucide="shield-check" style="width: 22px; height: 22px;"></i>
+                </div>
+                <div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <h3 style="margin: 0; font-size: 1.05rem;">系统服务: wg-quick@{{.ServerCfg.InterfaceName}}</h3>
+                        {{if not .Status.IsLinux}}
+                            <span class="badge badge-warning">非 Linux 环境 (演示/管理模式)</span>
+                        {{else if not .Status.IsInstalled}}
+                            <span class="badge badge-danger">未安装 wireguard-tools</span>
+                        {{else if .Status.IsActive}}
+                            <span class="badge badge-success"><span style="display:inline-block;width:6px;height:6px;background:var(--success);border-radius:50%;margin-right:4px;"></span>运行中</span>
+                        {{else}}
+                            <span class="badge badge-secondary">已停止</span>
+                        {{end}}
+
+                        {{if and .Status.IsLinux .Status.IsInstalled}}
+                            {{if .Status.IsEnabled}}
+                                <span class="badge badge-info" title="系统开机自动启动">开机自启: 开</span>
+                            {{else}}
+                                <span class="badge badge-secondary" title="未设置开机自启">开机自启: 关</span>
+                            {{end}}
+                        {{end}}
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.2rem;">
+                        Linux 内核空间网络设备，支持硬件加解密与零拷贝转发
+                    </div>
+                </div>
+            </div>
+
+            <!-- 服务控制按钮组 -->
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                {{if and .Status.IsLinux .Status.IsInstalled}}
+                    {{if .Status.IsActive}}
+                        <button class="btn btn-sm btn-outline" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.3);"
+                            hx-post="/api/wireguard/service/stop"
+                            hx-swap="none"
+                            hx-on::after-request="location.reload()"
+                            title="停止 WireGuard 服务">
+                            <i data-lucide="square" style="width: 14px; height: 14px;"></i> 停止
+                        </button>
+                        <button class="btn btn-sm btn-outline"
+                            hx-post="/api/wireguard/service/restart"
+                            hx-swap="none"
+                            hx-on::after-request="location.reload()"
+                            title="重启 WireGuard 服务">
+                            <i data-lucide="rotate-cw" style="width: 14px; height: 14px;"></i> 重启
+                        </button>
+                    {{else}}
+                        <button class="btn btn-sm btn-primary"
+                            hx-post="/api/wireguard/service/start"
+                            hx-swap="none"
+                            hx-on::after-request="location.reload()"
+                            title="启动 WireGuard 服务">
+                            <i data-lucide="play" style="width: 14px; height: 14px;"></i> 启动
+                        </button>
+                    {{end}}
+
+                    {{if .Status.IsEnabled}}
+                        <button class="btn btn-sm btn-outline"
+                            hx-post="/api/wireguard/service/disable"
+                            hx-swap="none"
+                            hx-on::after-request="location.reload()"
+                            title="取消开机自启">
+                            自启: 关
+                        </button>
+                    {{else}}
+                        <button class="btn btn-sm btn-outline"
+                            hx-post="/api/wireguard/service/enable"
+                            hx-swap="none"
+                            hx-on::after-request="location.reload()"
+                            title="开启开机自启">
+                            自启: 开
+                        </button>
+                    {{end}}
+                {{end}}
+            </div>
+        </div>
+
+        <!-- 关键运行参数网格 -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.85rem;">
+            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">监听端口 (可配置)</span>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <strong style="color: var(--accent); font-size: 1.1rem; font-family: monospace;">{{.ServerCfg.ListenPort}} / UDP</strong>
+                    <button class="btn btn-sm" style="padding: 2px 6px; font-size: 0.75rem;" hx-get="/wireguard/server/edit" hx-target="#modal-body" onclick="openModal('修改服务端配置')">修改</button>
+                </div>
+            </div>
+
+            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">服务端虚拟网段</span>
+                <strong style="font-family: monospace; font-size: 1rem;">{{.ServerCfg.Address}}</strong>
+            </div>
+
+            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">在线连接</span>
+                <div style="display: flex; align-items: baseline; gap: 0.4rem;">
+                    <strong style="color: var(--success); font-size: 1.1rem;">{{.Status.OnlinePeers}}</strong>
+                    <span style="color: var(--text-secondary);">/ {{.Status.ActivePeers}} 启用 (共 {{.Status.TotalPeers}} 个客户端)</span>
+                </div>
+            </div>
+
+            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">内核数据包转发</span>
+                <div style="display: flex; gap: 0.5rem; font-size: 0.85rem; font-family: monospace; align-items: center;">
+                    <span>IPv4: {{if .Status.IPv4Forwarding}}<span style="color:var(--success); font-weight: bold;">✓ 开启</span>{{else}}<span style="color:var(--warning)">✗ 关闭</span>{{end}}</span>
+                    <span style="color: rgba(255,255,255,0.2);">|</span>
+                    <span>IPv6: {{if .Status.IPv6Forwarding}}<span style="color:var(--success); font-weight: bold;">✓ 开启</span>{{else}}<span style="color:var(--warning)">✗ 关闭</span>{{end}}</span>
+                </div>
+            </div>
+
+            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">服务端公钥</span>
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                    <code style="font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="{{.ServerCfg.PublicKey}}">{{.ServerCfg.PublicKey}}</code>
+                    <button class="btn btn-sm" style="padding: 2px 6px;" onclick="copyText('{{.ServerCfg.PublicKey}}')" title="复制公钥">
+                        <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 客户端列表表格 -->
+    <div class="table-container">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem 0.5rem 1.25rem;">
+            <h3 style="margin: 0; font-size: 1.05rem;">客户端管理 (Peers)</h3>
+            <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                状态每 10 秒自动刷新
+            </span>
+        </div>
+        <div id="wg-peers-table" hx-get="/api/wireguard/peers/table" hx-trigger="load, every 10s" hx-swap="innerHTML">
+            <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">加载客户端列表中...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyText(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        showNotification('已复制到剪贴板', 'success');
+    }, function() {
+        showNotification('复制失败', 'error');
+    });
+}
+
+function runSetupEnv() {
+    var btn = document.getElementById('btn-setup-env');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite;">⏳</span> 正在配置环境中...';
+    }
+    fetch('/api/wireguard/setup-env', { method: 'POST' })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                showNotification(data.message || '环境配置成功！', 'success');
+                setTimeout(function() { location.reload(); }, 1200);
+            } else {
+                showNotification(data.error || '环境配置失败', 'error');
+                if (btn) { btn.disabled = false; btn.innerHTML = '重试一键配置'; }
+            }
+        })
+        .catch(function(err) {
+            showNotification('请求异常: ' + err, 'error');
+            if (btn) { btn.disabled = false; btn.innerHTML = '重试一键配置'; }
+        });
+}
+
+function copyManualCmd() {
+    var code = document.getElementById('manual-setup-cmd').innerText;
+    navigator.clipboard.writeText(code).then(function() {
+        showNotification('已复制命令到剪贴板', 'success');
+    }, function() {
+        showNotification('复制失败', 'error');
+    });
+}
+</script>
+{{end}}
+
