@@ -130,11 +130,11 @@
 echo -e "net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\nnet.ipv6.conf.default.forwarding = 1" > /etc/sysctl.d/99-wireguard.conf
 sysctl --system
 
-# 2. 安装 WireGuard 工具 (Debian / Ubuntu)
-apt update && apt install -y wireguard-tools
+# 2. 安装 WireGuard 工具及网络兼容包 (Debian / Ubuntu 22.04 / 24.04+)
+apt update && apt install -y wireguard-tools iptables
 
 # 或 CentOS / Rocky / AlmaLinux / Fedora:
-# dnf install -y epel-release wireguard-tools</pre>
+# dnf install -y epel-release wireguard-tools iptables</pre>
                     <button class="btn btn-sm btn-outline" style="position: absolute; top: 0.4rem; right: 0.4rem; padding: 2px 8px; font-size: 0.75rem;" onclick="copyManualCmd()">
                         <i data-lucide="copy" style="width: 12px; height: 12px;"></i> 复制命令
                     </button>
@@ -227,44 +227,112 @@ apt update && apt install -y wireguard-tools
             </div>
         </div>
 
-        <!-- 关键运行参数网格 -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.85rem;">
-            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">监听端口 (可配置)</span>
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <strong style="color: var(--accent); font-size: 1.1rem; font-family: monospace;">{{.ServerCfg.ListenPort}} / UDP</strong>
-                    <button class="btn btn-sm" style="padding: 2px 6px; font-size: 0.75rem;" hx-get="/wireguard/server/edit" hx-target="#modal-body" onclick="openModal('修改服务端配置')">修改</button>
+        <!-- 关键运行参数 2 行排布 -->
+        <style>
+            .wg-params-grid-2rows {
+                display: grid;
+                grid-template-columns: repeat(6, 1fr);
+                gap: 0.85rem;
+                width: 100%;
+                font-size: 0.85rem;
+            }
+            .wg-param-card {
+                background: rgba(0, 0, 0, 0.16);
+                padding: 0.85rem 1rem;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                box-sizing: border-box;
+                transition: border-color 0.2s, background 0.2s;
+                min-width: 0;
+            }
+            .wg-param-card:hover {
+                border-color: rgba(99, 102, 241, 0.3);
+                background: rgba(0, 0, 0, 0.22);
+            }
+            .wg-param-label {
+                color: var(--text-secondary);
+                font-size: 0.8rem;
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                margin-bottom: 0.45rem;
+                white-space: nowrap;
+            }
+            .col-span-2 { grid-column: span 2; }
+            .col-span-3 { grid-column: span 3; }
+
+            @media (max-width: 768px) {
+                .wg-params-grid-2rows {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+                .col-span-2, .col-span-3 {
+                    grid-column: span 1;
+                }
+                .col-span-full-mobile {
+                    grid-column: span 2;
+                }
+            }
+            @media (max-width: 480px) {
+                .wg-params-grid-2rows {
+                    grid-template-columns: 1fr;
+                }
+                .col-span-2, .col-span-3, .col-span-full-mobile {
+                    grid-column: span 1;
+                }
+            }
+        </style>
+        <div class="wg-params-grid-2rows">
+            <!-- 第 1 行 (3 个卡片) -->
+            <div class="wg-param-card col-span-2">
+                <span class="wg-param-label"><i data-lucide="radio" style="width: 14px; height: 14px; color: var(--accent);"></i> 监听端口 (可配置)</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                    <strong style="color: var(--accent); font-size: 1.15rem; font-family: monospace;">{{.ServerCfg.ListenPort}} <span style="font-size: 0.78rem; color: var(--text-secondary); font-weight: normal;">/ UDP</span></strong>
+                    <button class="btn btn-sm btn-outline" style="padding: 2px 8px; font-size: 0.78rem;" hx-get="/wireguard/server/edit" hx-target="#modal-body" onclick="openModal('修改服务端配置')">修改</button>
                 </div>
             </div>
 
-            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">服务端虚拟网段</span>
-                <strong style="font-family: monospace; font-size: 1rem;">{{.ServerCfg.Address}}</strong>
+            <div class="wg-param-card col-span-2">
+                <span class="wg-param-label"><i data-lucide="network" style="width: 14px; height: 14px; color: var(--accent);"></i> 服务端虚拟网段</span>
+                <strong style="font-family: monospace; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{.ServerCfg.Address}}">{{.ServerCfg.Address}}</strong>
             </div>
 
-            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">在线连接</span>
+            <div class="wg-param-card col-span-2">
+                <span class="wg-param-label"><i data-lucide="users" style="width: 14px; height: 14px; color: var(--accent);"></i> 在线连接</span>
                 <div style="display: flex; align-items: baseline; gap: 0.4rem;">
-                    <strong style="color: var(--success); font-size: 1.1rem;">{{.Status.OnlinePeers}}</strong>
-                    <span style="color: var(--text-secondary);">/ {{.Status.ActivePeers}} 启用 (共 {{.Status.TotalPeers}} 个客户端)</span>
+                    <strong style="color: var(--success); font-size: 1.15rem;">{{.Status.OnlinePeers}}</strong>
+                    <span style="color: var(--text-secondary); font-size: 0.82rem;">/ {{.Status.ActivePeers}} 启用 (共 {{.Status.TotalPeers}} 个客户端)</span>
                 </div>
             </div>
 
-            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">内核数据包转发</span>
-                <div style="display: flex; gap: 0.5rem; font-size: 0.85rem; font-family: monospace; align-items: center;">
-                    <span>IPv4: {{if .Status.IPv4Forwarding}}<span style="color:var(--success); font-weight: bold;">✓ 开启</span>{{else}}<span style="color:var(--warning)">✗ 关闭</span>{{end}}</span>
-                    <span style="color: rgba(255,255,255,0.2);">|</span>
-                    <span>IPv6: {{if .Status.IPv6Forwarding}}<span style="color:var(--success); font-weight: bold;">✓ 开启</span>{{else}}<span style="color:var(--warning)">✗ 关闭</span>{{end}}</span>
+            <!-- 第 2 行 (2 个卡片) -->
+            <div class="wg-param-card col-span-3">
+                <span class="wg-param-label"><i data-lucide="git-fork" style="width: 14px; height: 14px; color: var(--accent);"></i> 内核数据包转发与 NAT</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; font-family: monospace; font-size: 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span>IPv4: {{if .Status.IPv4Forwarding}}<span style="color:var(--success); font-weight: bold;">✓ 开启</span>{{else}}<span style="color:var(--warning)">✗ 关闭</span>{{end}}</span>
+                        <span style="color: rgba(255,255,255,0.2);">|</span>
+                        <span>IPv6: {{if .Status.IPv6Forwarding}}<span style="color:var(--success); font-weight: bold;">✓ 开启</span>{{else}}<span style="color:var(--warning)">✗ 关闭</span>{{end}}</span>
+                    </div>
+                    <div>
+                        <span style="color: var(--text-secondary); font-size: 0.8rem;">NAT 规则: </span>
+                        {{if .ServerCfg.EnableNAT}}
+                            <span style="color: var(--success); font-weight: bold;">✓ 已开启 (PostUp)</span>
+                        {{else}}
+                            <span style="color: var(--text-secondary);">未启用 (直连路由)</span>
+                        {{end}}
+                    </div>
                 </div>
             </div>
 
-            <div style="background: rgba(0, 0, 0, 0.15); padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                <span style="color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">服务端公钥</span>
-                <div style="display: flex; align-items: center; gap: 0.4rem;">
-                    <code style="font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;" title="{{.ServerCfg.PublicKey}}">{{.ServerCfg.PublicKey}}</code>
-                    <button class="btn btn-sm" style="padding: 2px 6px;" onclick="copyText('{{.ServerCfg.PublicKey}}')" title="复制公钥">
-                        <i data-lucide="copy" style="width: 12px; height: 12px;"></i>
+            <div class="wg-param-card col-span-3 col-span-full-mobile">
+                <span class="wg-param-label"><i data-lucide="key" style="width: 14px; height: 14px; color: var(--accent);"></i> 服务端公钥</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0;">
+                    <code style="font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; background: rgba(0,0,0,0.25); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);" title="{{.ServerCfg.PublicKey}}">{{.ServerCfg.PublicKey}}</code>
+                    <button class="btn btn-sm btn-outline" style="padding: 2px 8px; font-size: 0.78rem; flex-shrink: 0;" onclick="copyText('{{.ServerCfg.PublicKey}}')" title="复制完整公钥">
+                        <i data-lucide="copy" style="width: 13px; height: 13px;"></i> 复制
                     </button>
                 </div>
             </div>
@@ -325,6 +393,7 @@ function copyManualCmd() {
         showNotification('复制失败', 'error');
     });
 }
+if (window.lucide) { lucide.createIcons(); }
 </script>
 {{end}}
 

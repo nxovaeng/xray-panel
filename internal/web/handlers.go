@@ -1716,11 +1716,20 @@ func (h *Handler) UpdateWGServer(c *gin.Context) {
 		}
 	}
 
-	if postUp := c.PostForm("post_up"); postUp != "" {
-		serverCfg.PostUp = strings.TrimSpace(postUp)
+	oldEnableNAT := serverCfg.EnableNAT
+	enableNAT := c.PostForm("enable_nat") == "on" || c.PostForm("enable_nat") == "true" || c.PostForm("enable_nat") == "1"
+	serverCfg.EnableNAT = enableNAT
+
+	if postUp := strings.TrimSpace(c.PostForm("post_up")); postUp != "" {
+		serverCfg.PostUp = postUp
+	} else if enableNAT && serverCfg.PostUp == "" {
+		serverCfg.PostUp = models.DefaultPostUp("%i")
 	}
-	if postDown := c.PostForm("post_down"); postDown != "" {
-		serverCfg.PostDown = strings.TrimSpace(postDown)
+
+	if postDown := strings.TrimSpace(c.PostForm("post_down")); postDown != "" {
+		serverCfg.PostDown = postDown
+	} else if enableNAT && serverCfg.PostDown == "" {
+		serverCfg.PostDown = models.DefaultPostDown("%i")
 	}
 
 	serverCfg.UpdatedAt = time.Now()
@@ -1730,8 +1739,8 @@ func (h *Handler) UpdateWGServer(c *gin.Context) {
 	}
 
 	mgr := wireguard.NewManager(h.db)
-	portChanged := oldPort != newPort
-	if err := mgr.SyncConfig(portChanged); err != nil {
+	needRestart := (oldPort != newPort) || (oldEnableNAT != serverCfg.EnableNAT)
+	if err := mgr.SyncConfig(needRestart); err != nil {
 		logger.Warn("WireGuard config sync failed: %v", err)
 	}
 

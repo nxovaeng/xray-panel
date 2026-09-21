@@ -38,8 +38,9 @@ const panelConfigTmplStr = `server {
 }
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     server_name {{.Domain}};
 
     ssl_certificate {{.CertPath}};
@@ -78,8 +79,9 @@ const inboundsConfigTmplStr = `server {
 }
 
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     server_name {{.Domain}};
 {{if .HasCert}}
     ssl_certificate {{.CertPath}};

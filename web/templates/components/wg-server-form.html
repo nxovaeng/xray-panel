@@ -47,15 +47,28 @@
         </small>
     </div>
 
-    <div class="form-group">
-        <label for="wg_server_post_up">PostUp 规则 (启动时执行)</label>
-        <textarea id="wg_server_post_up" name="post_up" rows="3" style="font-family: monospace; font-size: 0.82rem;">{{.Server.PostUp}}</textarea>
-        <small class="form-hint">默认自动获取出口网卡进行 iptables NAT 转发与 TCP MSS 钳制</small>
-    </div>
+    <div class="form-group" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.85rem 1rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500; margin: 0;">
+            <input type="checkbox" id="wg_enable_nat" name="enable_nat" value="on"
+                {{if .Server.EnableNAT}}checked{{end}}
+                onchange="toggleNATFields(this.checked)" style="width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;">
+            <span>启用 NAT 出网转发规则 (PostUp / PostDown)</span>
+        </label>
+        <small class="form-hint" style="margin-top: 0.4rem; display: block;">
+            勾选时向 <code>wg0.conf</code> 写入 NAT 伪装转发规则；不勾选时不写入（VPS 间点对点互联推荐不勾选，纯直连路由、无 NAT 损耗）。
+        </small>
 
-    <div class="form-group">
-        <label for="wg_server_post_down">PostDown 规则 (停止时清理)</label>
-        <textarea id="wg_server_post_down" name="post_down" rows="2" style="font-family: monospace; font-size: 0.82rem;">{{.Server.PostDown}}</textarea>
+        <div id="nat-rules-container" style="margin-top: 0.85rem; {{if not .Server.EnableNAT}}display: none;{{end}}">
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+                <label for="wg_server_post_up" style="font-size: 0.85rem;">PostUp 规则 (启动时执行)</label>
+                <textarea id="wg_server_post_up" name="post_up" rows="3" style="font-family: monospace; font-size: 0.8rem;">{{.Server.PostUp}}</textarea>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="wg_server_post_down" style="font-size: 0.85rem;">PostDown 规则 (停止时清理)</label>
+                <textarea id="wg_server_post_down" name="post_down" rows="2" style="font-family: monospace; font-size: 0.8rem;">{{.Server.PostDown}}</textarea>
+            </div>
+        </div>
     </div>
 
     <div class="form-actions" style="margin-top: 1.5rem;">
@@ -84,6 +97,12 @@ function generateServerKeys() {
                 showNotification('已生成新服务端密钥对', 'success');
             }
         });
+}
+function toggleNATFields(checked) {
+    var el = document.getElementById('nat-rules-container');
+    if (el) {
+        el.style.display = checked ? 'block' : 'none';
+    }
 }
 if(window.lucide){ var _s=document.currentScript; lucide.createIcons({nameAttr:"data-lucide",attrs:{},nodes:[_s ? _s.closest("form") || document.body : document.body]}); }
 </script>

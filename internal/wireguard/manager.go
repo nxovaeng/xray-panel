@@ -50,6 +50,7 @@ type ServiceStatus struct {
 	ConflictInbound string `json:"conflict_inbound"`
 	IPv4Forwarding  bool   `json:"ipv4_forwarding"`
 	IPv6Forwarding  bool   `json:"ipv6_forwarding"`
+	EnableNAT       bool   `json:"enable_nat"`
 }
 
 // Manager handles kernel-level WireGuard configuration and systemd services.
@@ -152,15 +153,15 @@ func SetupEnvironment() (string, error) {
 
 		var cmd *exec.Cmd
 		if strings.Contains(osStr, "ubuntu") || strings.Contains(osStr, "debian") {
-			cmd = exec.Command("bash", "-c", "DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools")
+			cmd = exec.Command("bash", "-c", "DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y wireguard-tools iptables")
 		} else if strings.Contains(osStr, "centos") || strings.Contains(osStr, "rhel") || strings.Contains(osStr, "rocky") || strings.Contains(osStr, "almalinux") || strings.Contains(osStr, "fedora") {
-			cmd = exec.Command("bash", "-c", "which dnf >/dev/null 2>&1 && dnf install -y epel-release wireguard-tools || yum install -y epel-release wireguard-tools")
+			cmd = exec.Command("bash", "-c", "which dnf >/dev/null 2>&1 && dnf install -y epel-release wireguard-tools iptables || yum install -y epel-release wireguard-tools iptables")
 		} else if strings.Contains(osStr, "alpine") {
-			cmd = exec.Command("apk", "add", "wireguard-tools")
+			cmd = exec.Command("apk", "add", "wireguard-tools", "iptables")
 		} else if strings.Contains(osStr, "arch") {
-			cmd = exec.Command("pacman", "-Sy", "--noconfirm", "wireguard-tools")
+			cmd = exec.Command("pacman", "-Sy", "--noconfirm", "wireguard-tools", "iptables-nft")
 		} else {
-			cmd = exec.Command("apt-get", "install", "-y", "wireguard-tools")
+			cmd = exec.Command("apt-get", "install", "-y", "wireguard-tools", "iptables")
 		}
 
 		out, err := cmd.CombinedOutput()
@@ -197,6 +198,7 @@ func (m *Manager) GetStatus() (*ServiceStatus, error) {
 		ConflictInbound: conflictTag,
 		IPv4Forwarding:  ipv4Fwd,
 		IPv6Forwarding:  ipv6Fwd,
+		EnableNAT:       serverCfg.EnableNAT,
 	}
 
 	var totalPeers int64
@@ -295,11 +297,18 @@ func (m *Manager) GenerateWG0Conf(server *models.WGServerConfig, peers []models.
 	if server.MTU > 0 {
 		sb.WriteString(fmt.Sprintf("MTU = %d\n", server.MTU))
 	}
-	if strings.TrimSpace(server.PostUp) != "" {
-		sb.WriteString(fmt.Sprintf("PostUp = %s\n", strings.TrimSpace(server.PostUp)))
-	}
-	if strings.TrimSpace(server.PostDown) != "" {
-		sb.WriteString(fmt.Sprintf("PostDown = %s\n", strings.TrimSpace(server.PostDown)))
+	if server.EnableNAT {
+		postUp := strings.TrimSpace(server.PostUp)
+		if postUp == "" {
+			postUp = models.DefaultPostUp("%i")
+		}
+		sb.WriteString(fmt.Sprintf("PostUp = %s\n", postUp))
+
+		postDown := strings.TrimSpace(server.PostDown)
+		if postDown == "" {
+			postDown = models.DefaultPostDown("%i")
+		}
+		sb.WriteString(fmt.Sprintf("PostDown = %s\n", postDown))
 	}
 
 	for _, p := range peers {

@@ -165,6 +165,17 @@ func TestConfigGeneration(t *testing.T) {
 	if strings.Contains(conf, "disabled_pub_key") {
 		t.Errorf("disabled peer should not be in wg0.conf")
 	}
+	// EnableNAT is false: PostUp and PostDown must NOT be written
+	if strings.Contains(conf, "PostUp") || strings.Contains(conf, "PostDown") {
+		t.Errorf("expected no PostUp/PostDown when EnableNAT is false, got:\n%s", conf)
+	}
+
+	// EnableNAT is true: PostUp and PostDown must be written
+	serverCfg.EnableNAT = true
+	confWithNAT := mgr.GenerateWG0Conf(serverCfg, peers)
+	if !strings.Contains(confWithNAT, "PostUp") || !strings.Contains(confWithNAT, "PostDown") {
+		t.Errorf("expected PostUp/PostDown when EnableNAT is true, got:\n%s", confWithNAT)
+	}
 
 	// Test client configs
 	clientWG := mgr.GenerateClientWGConfig(serverCfg, &peers[0], "1.2.3.4")

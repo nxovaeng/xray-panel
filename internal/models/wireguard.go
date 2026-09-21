@@ -22,6 +22,7 @@ type WGServerConfig struct {
 	ListenPort    int       `json:"listen_port" form:"listen_port" gorm:"default:51820"`
 	Address       string    `json:"address" form:"address" gorm:"default:10.0.0.1/24"`
 	MTU           int       `json:"mtu" form:"mtu" gorm:"default:1420"`
+	EnableNAT     bool      `json:"enable_nat" form:"enable_nat" gorm:"default:false"`
 	PostUp        string    `json:"post_up" form:"post_up"`
 	PostDown      string    `json:"post_down" form:"post_down"`
 	Enabled       bool      `json:"enabled" form:"enabled" gorm:"default:true"`
@@ -107,6 +108,7 @@ func GetWGServerConfig(db *gorm.DB) (*WGServerConfig, error) {
 		ListenPort:    51820,
 		Address:       "10.0.0.1/24",
 		MTU:           1420,
+		EnableNAT:     false,
 		PostUp:        DefaultPostUp("%i"),
 		PostDown:      DefaultPostDown("%i"),
 		Enabled:       true,
